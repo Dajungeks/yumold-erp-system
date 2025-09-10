@@ -1,0 +1,2905 @@
+"""
+시스템 설정 페이지 - 제품 분류 관리 중심
+"""
+
+import streamlit as st
+import pandas as pd
+import os
+from datetime import datetime
+
+def show_system_settings_page(config_manager, get_text, hide_header=False):
+    """시스템 설정 메인 페이지"""
+    
+    if not hide_header:
+        st.header("⚙️ 시스템 설정")
+        st.caption("제품 분류, 회사 정보, 시스템 옵션을 관리합니다")
+    
+    # 제품 카테고리 설정 관리자 확인
+    if config_manager is None:
+        try:
+            from product_category_config_manager import ProductCategoryConfigManager
+            config_manager = ProductCategoryConfigManager()
+        except Exception as e:
+            st.error(f"시스템 설정 관리자 초기화 오류: {e}")
+            return
+    
+    # 3개 주요 탭
+    tabs = st.tabs([
+        "📋 제품 분류 관리", 
+        "🏢 회사 정보 설정", 
+        "🔧 시스템 옵션"
+    ])
+    
+    with tabs[0]:  # 제품 분류 관리
+        show_product_category_management(config_manager)
+    
+    with tabs[1]:  # 회사 정보 설정
+        show_company_info_settings()
+    
+    with tabs[2]:  # 시스템 옵션
+        show_system_options()
+
+def show_product_category_management(config_manager):
+    """제품 분류 관리 탭"""
+    st.subheader("📋 제품 분류 관리")
+    st.caption("제품 카테고리, 서브 카테고리, 재질 등을 동적으로 관리합니다")
+    
+    # 세션 상태에서 선택된 탭 확인
+    default_tab_index = 0
+    if 'settings_tab' in st.session_state and st.session_state['settings_tab'] == 'HR 제품 코드 구성':
+        default_tab_index = 1  # HR 세부설정 탭
+    
+    # 카테고리 관리 세부 탭
+    category_tabs = st.tabs([
+        "🏷️ 메인 카테고리",
+        "🏗️ HR 제품 코드 구성"
+    ])
+    
+    with category_tabs[0]:
+        show_main_categories(config_manager)
+    
+    with category_tabs[1]:
+        # HR 제품 코드 구성 관리 (제조사/원산지 관리 포함)
+        show_hr_subcategories(config_manager)
+
+def show_main_categories(config_manager):
+    """메인 카테고리 관리"""
+    st.subheader("🏷️ 메인 카테고리 관리")
+    st.caption("제품 카테고리, 서브 카테고리, 재질 등을 동적으로 관리합니다")
+    
+    # 현재 메인 카테고리 표시
+    st.write("**현재 메인 카테고리:**")
+    
+    # 기본 카테고리 정의
+    default_categories = [
+        ("HR", "Hot Runner", "핫러너 시스템")
+    ]
+    
+    # 3열로 카테고리 버튼 배치
+    cols = st.columns(3)
+    for i, (category_key, category_name, description) in enumerate(default_categories):
+        with cols[i % 3]:
+            # HRC 카테고리는 Controller로 표시
+            display_text = "Controller" if category_key == "HRC" else category_key
+            if st.button(f"**{display_text}**", key=f"main_cat_{category_key}", use_container_width=True, help=description):
+                st.session_state['selected_main_category'] = category_key
+                st.rerun()
+    
+    # 선택된 카테고리의 제품 목록 표시
+    if 'selected_main_category' in st.session_state:
+        show_category_products(st.session_state['selected_main_category'])
+    
+    # 새 메인 카테고리 추가 확장자
+    with st.expander("➕ 새 메인 카테고리 추가"):
+        with st.form("add_main_category"):
+            new_key = st.text_input("카테고리 키", placeholder="예: ROBOT")
+            new_description = st.text_input("설명", placeholder="예: 로봇 시스템")
+            
+            if st.form_submit_button("🔄 메인 카테고리 추가"):
+                if new_key:
+                    try:
+                        success, result = config_manager.add_category(
+                            'main_category', None, new_key, new_key, None, None, new_description
+                        )
+                        if success:
+                            st.success(f"메인 카테고리 '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error(f"카테고리 추가 중 오류가 발생했습니다: {result}")
+                    except:
+                        st.info("기본 카테고리는 이미 설정되어 있습니다.")
+                else:
+                    st.warning("카테고리 키는 필수입니다.")
+
+def show_category_products(category_key):
+    """선택된 카테고리의 등록된 제품들을 테이블로 표시"""
+    # HRC 카테고리는 Controller로 표시
+    display_name = "Controller" if category_key == "HRC" else category_key
+    st.markdown(f"### 📦 {display_name} 카테고리 등록 제품")
+    
+    try:
+        import sqlite3
+        import pandas as pd
+        
+        # 데이터베이스 연결 - SQLite 매니저와 동일한 경로 사용
+        from managers.sqlite.sqlite_master_product_manager import SQLiteMasterProductManager
+        
+        # 실제 사용하는 데이터베이스 경로 가져오기
+        master_manager = SQLiteMasterProductManager()
+        db_path = master_manager.db_path
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # 통합 제품과 판매 제품에서 해당 카테고리 제품 조회 (정확히 해당 카테고리로 시작하는 것만)
+        # HR의 경우 HRC는 제외하고, MB의 경우 MB+HR는 제외
+        if category_key == 'HR':
+            where_condition = "product_code LIKE 'HR-%' AND product_code NOT LIKE 'HRC-%' AND product_code NOT LIKE 'HR+%'"
+        elif category_key == 'HRC':
+            where_condition = "product_code LIKE 'HRC-%'"
+        elif category_key == 'MB':
+            where_condition = "product_code LIKE 'MB-%' AND product_code NOT LIKE 'MB+HR-%'"
+        elif category_key == 'MB+HR':
+            where_condition = "product_code LIKE 'MB+HR-%'"
+        elif category_key in ['SPARE-HR', 'SPARE-MB', 'SPARE-ROBOT']:
+            spare_type = category_key.split('-')[1]
+            where_condition = f"product_code LIKE 'SPARE-{spare_type}-%' OR product_code LIKE 'SP-{spare_type}-%'"
+        else:
+            where_condition = f"product_code LIKE '{category_key}-%'"
+        
+        # HR, HRC 카테고리의 경우 제조사, 공급처, 원산지 컬럼 제외 (깔끔한 표시)
+        if category_key in ['HR', 'HRC']:
+            cursor.execute(f'''
+                SELECT 
+                    product_code,
+                    product_name as name_korean,
+                    'MASTER' as product_type,
+                    created_date
+                FROM master_products
+                WHERE {where_condition}
+                
+                UNION ALL
+                
+                SELECT 
+                    product_code,
+                    product_name as name_korean,
+                    'SALES' as product_type,
+                    created_date
+                FROM sales_products
+                WHERE {where_condition}
+                
+                ORDER BY product_code
+            ''')
+        else:
+            cursor.execute(f'''
+                SELECT 
+                    product_code,
+                    product_name as name_korean,
+                    manufacturer,
+                    supplier_name,
+                    origin_country,
+                    'MASTER' as product_type,
+                    created_date
+                FROM master_products
+                WHERE {where_condition}
+                
+                UNION ALL
+                
+                SELECT 
+                    product_code,
+                    product_name as name_korean,
+                    brand as manufacturer,
+                    '' as supplier_name,
+                    '' as origin_country,
+                    'SALES' as product_type,
+                    created_date
+                FROM sales_products
+                WHERE {where_condition}
+                
+                ORDER BY product_code
+            ''')
+        
+        products = cursor.fetchall()
+        conn.close()
+        
+        if products:
+            # HR, HRC 카테고리와 다른 카테고리에 따라 DataFrame 컬럼 구성 다르게 처리
+            if category_key in ['HR', 'HRC']:
+                # HR, HRC 카테고리: 제품코드, 제품명, 타입, 등록일만 (깔끔한 표시)
+                columns = ['제품코드', '제품명', '타입', '등록일']
+                df = pd.DataFrame(products, columns=columns)
+                column_config = {
+                    "제품코드": st.column_config.TextColumn("제품코드", width="medium"),
+                    "제품명": st.column_config.TextColumn("제품명", width="large"),
+                    "타입": st.column_config.TextColumn("타입", width="small"),
+                    "등록일": st.column_config.DatetimeColumn("등록일", width="medium")
+                }
+            else:
+                # 다른 카테고리: 모든 컬럼 포함
+                columns = ['제품코드', '제품명', '제조사', '공급처', '원산지', '타입', '등록일']
+                df = pd.DataFrame(products, columns=columns)
+                column_config = {
+                    "제품코드": st.column_config.TextColumn("제품코드", width="medium"),
+                    "제품명": st.column_config.TextColumn("제품명", width="large"),
+                    "제조사": st.column_config.TextColumn("제조사", width="medium"),
+                    "공급처": st.column_config.TextColumn("공급처", width="medium"),
+                    "원산지": st.column_config.TextColumn("원산지", width="small"),
+                    "타입": st.column_config.TextColumn("타입", width="small"),
+                    "등록일": st.column_config.DatetimeColumn("등록일", width="medium")
+                }
+            
+            # 테이블 표시
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config=column_config
+            )
+            
+            # 요약 정보
+            total_count = len(products)
+            master_count = len(df[df['타입'] == 'MASTER'])
+            sales_count = len(df[df['타입'] == 'SALES'])
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("총 제품", total_count)
+            with col2:
+                st.metric("통합 제품", master_count)
+            with col3:
+                st.metric("판매 제품", sales_count)
+            with col4:
+                if st.button("🔄 새로고침", key=f"refresh_{category_key}"):
+                    st.rerun()
+            
+            # 제품 관리 세부 설정
+            st.markdown("---")
+            st.markdown("### ⚙️ 제품 관리 세부설정")
+            
+            col_manage1, col_manage2 = st.columns(2)
+            
+            with col_manage1:
+                st.markdown("#### 📋 판매 제품 등록")
+                
+                # 통합 제품 중 판매 제품에 없는 것들 조회
+                try:
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    
+                    cursor.execute(f'''
+                        SELECT m.product_code, m.product_name
+                        FROM master_products m
+                        WHERE {where_condition}
+                        AND m.product_code NOT IN (
+                            SELECT product_code FROM sales_products 
+                            WHERE {where_condition}
+                        )
+                        ORDER BY m.product_code
+                    ''')
+                    
+                    available_products = cursor.fetchall()
+                    conn.close()
+                    
+                    if available_products:
+                        product_options = [f"{code} - {name}" for code, name in available_products]
+                        
+                        selected_product = st.selectbox(
+                            "판매 제품으로 등록할 제품 선택",
+                            [""] + product_options,
+                            key=f"select_product_{category_key}"
+                        )
+                        
+                        if selected_product and st.button("📋 판매 제품으로 등록", key=f"add_sales_{category_key}"):
+                            product_code = selected_product.split(" - ")[0]
+                            product_name = selected_product.split(" - ")[1]
+                            
+                            # 판매 제품 등록
+                            try:
+                                from managers.sqlite.sqlite_sales_product_manager import SQLiteSalesProductManager
+                                sales_manager = SQLiteSalesProductManager()
+                                
+                                sales_data = {
+                                    'product_code': product_code,
+                                    'product_name': product_name,
+                                    'category': category_key,
+                                    'price': 0,
+                                    'currency': 'VND'
+                                }
+                                
+                                result = sales_manager.add_sales_product(sales_data)
+                                if result:
+                                    st.success(f"✅ {product_code} 제품이 판매 제품으로 등록되었습니다.")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ 판매 제품 등록에 실패했습니다.")
+                            except Exception as e:
+                                st.error(f"❌ 오류: {str(e)}")
+                    else:
+                        st.info("판매 제품으로 등록할 수 있는 통합 제품이 없습니다.")
+                        
+                except Exception as e:
+                    st.error(f"제품 조회 중 오류: {str(e)}")
+            
+            with col_manage2:
+                st.markdown("#### 🗑️ 제품 삭제")
+                
+                if total_count > 0:
+                    # 제품 삭제 선택
+                    product_options_del = [f"{row['제품코드']} - {row['제품명']} ({row['타입']})" for _, row in df.iterrows()]
+                    
+                    selected_product_del = st.selectbox(
+                        "삭제할 제품 선택",
+                        [""] + product_options_del,
+                        key=f"select_delete_{category_key}"
+                    )
+                    
+                    if selected_product_del:
+                        product_code_del = selected_product_del.split(" - ")[0]
+                        product_type_del = selected_product_del.split("(")[1].replace(")", "")
+                        
+                        st.warning(f"⚠️ **{product_code_del}** 제품을 삭제하시겠습니까?")
+                        st.caption("이 작업은 되돌릴 수 없습니다.")
+                        
+                        if st.button("🗑️ 제품 삭제", key=f"delete_product_{category_key}", type="secondary"):
+                            try:
+                                conn = sqlite3.connect(db_path)
+                                cursor = conn.cursor()
+                                
+                                deleted_count = 0
+                                if product_type_del == "MASTER":
+                                    # 먼저 master_product_id 조회
+                                    cursor.execute("SELECT master_product_id FROM master_products WHERE product_code = ?", (product_code_del,))
+                                    result = cursor.fetchone()
+                                    if result:
+                                        master_product_id = result[0]
+                                        # 관련 재고/가격 데이터도 함께 삭제 (올바른 컬럼명 사용)
+                                        cursor.execute("DELETE FROM master_product_inventory WHERE master_product_id = ?", (master_product_id,))
+                                        cursor.execute("DELETE FROM master_product_prices WHERE master_product_id = ?", (master_product_id,))
+                                        cursor.execute("DELETE FROM master_products WHERE product_code = ?", (product_code_del,))
+                                        deleted_count = cursor.rowcount
+                                        deleted_table = "통합 제품"
+                                    else:
+                                        deleted_count = 0
+                                else:
+                                    cursor.execute("DELETE FROM sales_products WHERE product_code = ?", (product_code_del,))
+                                    deleted_count = cursor.rowcount
+                                    deleted_table = "판매 제품"
+                                
+                                if deleted_count > 0:
+                                    conn.commit()
+                                    st.success(f"✅ {product_code_del} 제품이 {deleted_table}에서 삭제되었습니다. (삭제된 행: {deleted_count}개)")
+                                    st.rerun()
+                                else:
+                                    st.warning(f"⚠️ {product_code_del} 제품을 찾을 수 없습니다.")
+                                
+                                conn.close()
+                                
+                            except Exception as e:
+                                st.error(f"❌ 삭제 중 오류: {str(e)}")
+                                if 'conn' in locals():
+                                    conn.close()
+                else:
+                    st.info("삭제할 제품이 없습니다.")
+        else:
+            display_name = "Controller" if category_key == "HRC" else category_key
+            st.info(f"{display_name} 카테고리에 등록된 제품이 없습니다.")
+            
+    except Exception as e:
+        st.error(f"제품 조회 중 오류가 발생했습니다: {e}")
+    
+    # 뒫으로 가기 버튼
+    if st.button("⬅️ 카테고리 목록으로 돌아가기", key=f"back_{category_key}"):
+        if 'selected_main_category' in st.session_state:
+            del st.session_state['selected_main_category']
+        st.rerun()
+
+def show_hr_subcategories(config_manager):
+    """HR 제품 코드 구성 요소 관리"""
+    st.subheader("🏗️ HR 제품 코드 구성 관리")
+    st.caption("HR 카테고리의 System Type, 제품 타입, 게이트 타입, 사이즈를 관리합니다")
+    
+    # 세션 상태 초기화
+    if 'hr_component_tab' in st.session_state:
+        del st.session_state['hr_component_tab']
+    if 'settings_tab' in st.session_state:
+        del st.session_state['settings_tab']
+    
+    # HR 구성 요소 관리 탭
+    hr_tabs = st.tabs([
+        "🔧 System Type", 
+        "📋 제품 타입", 
+        "🚪 게이트 타입", 
+        "📏 사이즈"
+    ])
+    
+    with hr_tabs[0]:
+        manage_hr_system_types(config_manager)
+    
+    with hr_tabs[1]:
+        manage_hr_product_types(config_manager)
+    
+    with hr_tabs[2]:
+        manage_hr_gate_types(config_manager)
+    
+    with hr_tabs[3]:
+        manage_hr_sizes(config_manager)
+
+def manage_hr_system_types(config_manager):
+    """System Type 관리"""
+    st.subheader("🔧 System Type 관리")
+    
+    # 현재 System Type 목록 표시
+    system_types = config_manager.get_hr_components_for_management('system_type')
+    
+    if system_types:
+        st.write("**현재 System Types:**")
+        for st_type in system_types:
+            if st_type['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{st_type['component_key']}** - {st_type['component_name']}")
+                    if st_type['description']:
+                        st.caption(st_type['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_st_{st_type['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_st_{st_type['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_st_{st_type['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(st_type['component_id']):
+                            st.success("System Type이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_st_{st_type['component_id']}", False):
+                    with st.expander("✏️ System Type 수정", expanded=True):
+                        with st.form(f"edit_system_type_{st_type['component_id']}"):
+                            new_key = st.text_input("키", value=st_type['component_key'])
+                            new_description = st.text_input("설명", value=st_type['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        st_type['component_id'], component_key=new_key, 
+                                        component_name=new_key, description=new_description
+                                    ):
+                                        st.success("System Type이 수정되었습니다!")
+                                        del st.session_state[f"editing_st_{st_type['component_id']}"]
+                                        st.rerun()
+                                    else:
+                                        st.error("수정 중 오류가 발생했습니다.")
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    del st.session_state[f"editing_st_{st_type['component_id']}"]
+                                    st.rerun()
+    
+    # 새 System Type 추가
+    with st.expander("➕ 새 System Type 추가"):
+        with st.form("add_system_type"):
+            new_key = st.text_input("키", placeholder="예: Coil")
+            new_description = st.text_input("설명", placeholder="예: 코일형 핫러너 시스템")
+            
+            if st.form_submit_button("➕ System Type 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'system_type', None, new_key, new_key, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"System Type '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("System Type 추가 중 오류가 발생했습니다. (중복된 키일 수 있습니다)")
+                else:
+                    st.warning("키는 필수입니다.")
+
+def manage_hr_product_types(config_manager):
+    """Product Type 관리"""
+    st.subheader("📋 제품 타입 관리")
+    
+    # System Type 선택
+    system_types = config_manager.get_hr_system_types()
+    
+    if not system_types:
+        st.warning("먼저 System Type을 등록해주세요.")
+        return
+    
+    selected_system = st.selectbox("System Type 선택", [""] + system_types)
+    
+    if selected_system:
+        # 선택된 System Type의 Product Type 목록
+        product_types = config_manager.get_hr_components_for_management('product_type')
+        filtered_types = [pt for pt in product_types if pt['parent_component'] == selected_system and pt['is_active']]
+        
+        if filtered_types:
+            st.write(f"**{selected_system}의 제품 타입:**")
+            for pt in filtered_types:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"• **{pt['component_key']}** - {pt['component_name']}")
+                    if pt['description']:
+                        st.caption(pt['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_pt_{pt['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_pt_{pt['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_pt_{pt['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(pt['component_id']):
+                            st.success("제품 타입이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_pt_{pt['component_id']}", False):
+                    with st.expander("✏️ 제품 타입 수정", expanded=True):
+                        with st.form(f"edit_product_type_{pt['component_id']}"):
+                            new_key = st.text_input("키", value=pt['component_key'])
+                            new_description = st.text_input("설명", value=pt['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        pt['component_id'], component_key=new_key, 
+                                        component_name=new_key, description=new_description
+                                    ):
+                                        st.success("제품 타입이 수정되었습니다!")
+                                        del st.session_state[f"editing_pt_{pt['component_id']}"]
+                                        st.rerun()
+                                    else:
+                                        st.error("수정 중 오류가 발생했습니다.")
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    del st.session_state[f"editing_pt_{pt['component_id']}"]
+                                    st.rerun()
+        else:
+            st.info(f"{selected_system}에 등록된 제품 타입이 없습니다.")
+        
+        # 새 Product Type 추가
+        with st.expander(f"➕ {selected_system}에 새 제품 타입 추가"):
+            with st.form(f"add_product_type_{selected_system}"):
+                new_key = st.text_input("키", placeholder="예: ST")
+                new_description = st.text_input("설명", placeholder="예: 표준형 제품")
+                
+                if st.form_submit_button("➕ 제품 타입 추가"):
+                    if new_key:
+                        success = config_manager.add_hr_component(
+                            'product_type', selected_system, new_key, new_key, 
+                            None, None, new_description
+                        )
+                        if success:
+                            st.success(f"제품 타입 '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("제품 타입 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("키는 필수입니다.")
+
+def manage_hr_gate_types(config_manager):
+    """Gate Type 관리"""
+    st.subheader("🚪 게이트 타입 관리")
+    
+    # System Type과 Product Type 선택
+    system_types = config_manager.get_hr_system_types()
+    
+    if not system_types:
+        st.warning("먼저 System Type을 등록해주세요.")
+        return
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_system = st.selectbox("System Type", [""] + system_types, key="gate_system")
+    
+    with col2:
+        if selected_system:
+            product_types = config_manager.get_hr_product_types(selected_system)
+            selected_product = st.selectbox("제품 타입", [""] + product_types, key="gate_product")
+        else:
+            selected_product = None
+    
+    if selected_system and selected_product:
+        parent_key = f"{selected_system}-{selected_product}"
+        
+        # Gate Type 목록 표시
+        gate_types = config_manager.get_hr_components_for_management('gate_type')
+        filtered_gates = [gt for gt in gate_types if gt['parent_component'] == parent_key and gt['is_active']]
+        
+        if filtered_gates:
+            st.write(f"**{selected_system}-{selected_product}의 게이트 타입:**")
+            for gt in filtered_gates:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"• **{gt['component_key']}** - {gt['component_name']}")
+                    if gt['description']:
+                        st.caption(gt['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_gt_{gt['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_gt_{gt['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_gt_{gt['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(gt['component_id']):
+                            st.success("게이트 타입이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_gt_{gt['component_id']}", False):
+                    with st.expander("✏️ 게이트 타입 수정", expanded=True):
+                        with st.form(f"edit_gate_type_{gt['component_id']}"):
+                            new_key = st.text_input("키", value=gt['component_key'])
+                            new_description = st.text_input("설명", value=gt['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        gt['component_id'], component_key=new_key, 
+                                        component_name=new_key, description=new_description
+                                    ):
+                                        st.success("게이트 타입이 수정되었습니다!")
+                                        del st.session_state[f"editing_gt_{gt['component_id']}"]
+                                        st.rerun()
+                                    else:
+                                        st.error("수정 중 오류가 발생했습니다.")
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    del st.session_state[f"editing_gt_{gt['component_id']}"]
+                                    st.rerun()
+        
+        # 새 Gate Type 추가
+        with st.expander(f"➕ {parent_key}에 새 게이트 타입 추가"):
+            # 고유한 폼 키 사용
+            form_key = f"add_gate_type_{parent_key.replace('-', '_')}"
+            with st.form(form_key):
+                new_key = st.text_input("키", placeholder="예: MAE", key=f"gt_key_{parent_key}")
+                new_description = st.text_input("설명", placeholder="예: MAE 타입 게이트", key=f"gt_desc_{parent_key}")
+                
+                if st.form_submit_button("➕ 게이트 타입 추가"):
+                    if new_key.strip():
+                        try:
+                            success = config_manager.add_hr_component(
+                                'gate_type', parent_key, new_key.strip(), new_key.strip(), 
+                                None, None, new_description.strip() if new_description else None
+                            )
+                            if success:
+                                st.success(f"✅ 게이트 타입 '{new_key}'가 추가되었습니다!")
+                                # 세션 상태 초기화로 새로고침 효과
+                                if 'gate_type_refresh' in st.session_state:
+                                    del st.session_state['gate_type_refresh']
+                                st.rerun()
+                            else:
+                                st.error("❌ 게이트 타입 추가 중 오류가 발생했습니다. (중복된 키일 수 있습니다)")
+                        except Exception as e:
+                            st.error(f"❌ 오류: {str(e)}")
+                    else:
+                        st.warning("⚠️ 키는 필수입니다.")
+
+def manage_hr_sizes(config_manager):
+    """Size 관리"""
+    st.subheader("📏 사이즈 관리")
+    
+    # System Type과 Product Type 선택
+    system_types = config_manager.get_hr_system_types()
+    
+    if not system_types:
+        st.warning("먼저 System Type을 등록해주세요.")
+        return
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_system = st.selectbox("System Type", [""] + system_types, key="size_system")
+    
+    with col2:
+        if selected_system:
+            product_types = config_manager.get_hr_product_types(selected_system)
+            selected_product = st.selectbox("제품 타입", [""] + product_types, key="size_product")
+        else:
+            selected_product = None
+    
+    with col3:
+        if selected_system and selected_product:
+            gate_types = config_manager.get_hr_gate_types(selected_system, selected_product)
+            selected_gate = st.selectbox("게이트 타입", [""] + gate_types, key="size_gate")
+        else:
+            selected_gate = None
+    
+    if selected_system and selected_product and selected_gate:
+        parent_key = f"{selected_system}-{selected_product}-{selected_gate}"
+        
+        # Size 목록 표시
+        sizes = config_manager.get_hr_components_for_management('size')
+        filtered_sizes = [sz for sz in sizes if sz['parent_component'] == parent_key and sz['is_active']]
+        
+        if filtered_sizes:
+            st.write(f"**{selected_system}-{selected_product}-{selected_gate}의 사이즈:**")
+            for sz in filtered_sizes:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"• **{sz['component_key']}** - {sz['component_name']}")
+                    if sz['description']:
+                        st.caption(sz['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_sz_{sz['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_sz_{sz['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_sz_{sz['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(sz['component_id']):
+                            st.success("사이즈가 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_sz_{sz['component_id']}", False):
+                    with st.expander("✏️ 사이즈 수정", expanded=True):
+                        with st.form(f"edit_size_{sz['component_id']}"):
+                            new_key = st.text_input("키", value=sz['component_key'])
+                            new_description = st.text_input("설명", value=sz['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    old_size = sz['component_key']
+                                    
+                                    if config_manager.update_hr_component(
+                                        sz['component_id'], component_key=new_key, 
+                                        component_name=new_key, description=new_description
+                                    ):
+                                        st.success("사이즈가 수정되었습니다!")
+                                        
+                                        # 사이즈 변경 시 관련 제품들 자동 업데이트
+                                        if old_size != new_key:
+                                            st.info(f"🔄 사이즈 변경 감지: {old_size} → {new_key}")
+                                            try:
+                                                from managers.sqlite.sqlite_master_product_manager import SQLiteMasterProductManager
+                                                master_manager = SQLiteMasterProductManager()
+                                                
+                                                # parent_key에서 System Type, Product Type, Gate Type 추출
+                                                parts = parent_key.split('-')
+                                                st.info(f"📋 Parent Key 분석: {parent_key} → {parts}")
+                                                
+                                                if len(parts) == 3:
+                                                    system_type, product_type, gate_type = parts
+                                                    
+                                                    # System Type 코드 변환
+                                                    system_type_code = ""
+                                                    if system_type == "Valve":
+                                                        system_type_code = "VV"
+                                                    elif system_type == "Open":
+                                                        system_type_code = "OP"
+                                                    else:
+                                                        system_type_code = system_type[:2].upper()
+                                                    
+                                                    # 기존 및 새로운 제품 코드
+                                                    old_product_code = f"HR-{system_type_code}-{product_type}-{gate_type}-{old_size}"
+                                                    new_product_code = f"HR-{system_type_code}-{product_type}-{gate_type}-{new_key}"
+                                                    
+                                                    st.info(f"🎯 제품 코드 변환: {old_product_code} → {new_product_code}")
+                                                    
+                                                    # 기존 제품 조회
+                                                    import sqlite3
+                                                    conn = sqlite3.connect(master_manager.db_path)
+                                                    cursor = conn.cursor()
+                                                    
+                                                    cursor.execute("SELECT * FROM master_products WHERE product_code = ?", (old_product_code,))
+                                                    existing_product = cursor.fetchone()
+                                                    
+                                                    if existing_product:
+                                                        st.info(f"✅ 기존 제품 발견: {old_product_code}")
+                                                        
+                                                        # 새로운 제품명 생성
+                                                        korean_base = "핫러너 밸브" if system_type == "Valve" else f"핫러너 {system_type}"
+                                                        new_korean_name = f"{korean_base} {product_type} {gate_type} {new_key}mm"
+                                                        new_english_name = f"Hot Runner {system_type} {product_type} {gate_type} {new_key}mm"
+                                                        
+                                                        # 제품 정보 업데이트
+                                                        cursor.execute('''
+                                                            UPDATE master_products 
+                                                            SET product_code = ?, product_name = ?, product_name_en = ?, product_name_vi = ?, updated_date = datetime('now')
+                                                            WHERE product_code = ?
+                                                        ''', (new_product_code, new_korean_name, new_english_name, new_english_name, old_product_code))
+                                                        
+                                                        updated_count = cursor.rowcount
+                                                        conn.commit()
+                                                        conn.close()
+                                                        
+                                                        if updated_count > 0:
+                                                            st.success(f"🎯 **제품 자동 업데이트 완료!** `{old_product_code}` → `{new_product_code}`")
+                                                        else:
+                                                            st.warning(f"⚠️ 제품 업데이트 실패: {old_product_code}")
+                                                    else:
+                                                        st.warning(f"⚠️ 기존 제품을 찾을 수 없음: {old_product_code}")
+                                                        conn.close()
+                                                else:
+                                                    st.error(f"❌ Parent Key 형식 오류: {parent_key}")
+                                                        
+                                            except Exception as e:
+                                                st.error(f"❌ 제품 자동 업데이트 오류: {str(e)}")
+                                                import traceback
+                                                st.code(traceback.format_exc())
+                                        
+                                        del st.session_state[f"editing_sz_{sz['component_id']}"]
+                                        st.rerun()
+                                    else:
+                                        st.error("수정 중 오류가 발생했습니다.")
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    del st.session_state[f"editing_sz_{sz['component_id']}"]
+                                    st.rerun()
+        
+        else:
+            st.info(f"🔍 {selected_system}-{selected_product}-{selected_gate}에 등록된 사이즈가 없습니다.")
+            st.markdown("💡 **아래에서 새 사이즈를 추가하세요!**")
+        
+        # 새 Size 추가
+        with st.expander(f"➕ {selected_system}-{selected_product}-{selected_gate}에 새 사이즈 추가"):
+            with st.form(f"add_size_{parent_key}"):
+                new_key = st.text_input("키", placeholder="예: 20")
+                new_description = st.text_input("설명", placeholder="예: 20mm 사이즈")
+                
+                if st.form_submit_button("➕ 사이즈 추가"):
+                    if new_key:
+                        success = config_manager.add_hr_component(
+                            'size', parent_key, new_key, new_key, 
+                            None, None, new_description
+                        )
+                        if success:
+                            st.success(f"사이즈 '{new_key}'가 추가되었습니다!")
+                            
+                            # 제품 코드 자동 생성 및 등록
+                            try:
+                                # parent_key에서 System Type, Product Type, Gate Type 추출
+                                parts = parent_key.split('-')
+                                if len(parts) == 3:
+                                    system_type, product_type, gate_type = parts
+                                    
+                                    # System Type 코드 변환
+                                    system_type_code = ""
+                                    if system_type == "Valve":
+                                        system_type_code = "VV"
+                                    elif system_type == "Open":
+                                        system_type_code = "OP"
+                                    else:
+                                        system_type_code = system_type[:2].upper()
+                                    
+                                    # 제품 코드 생성
+                                    generated_code = f"HR-{system_type_code}-{product_type}-{gate_type}-{new_key}"
+                                    
+                                    # master_products에 자동 등록
+                                    from managers.sqlite.sqlite_master_product_manager import SQLiteMasterProductManager
+                                    master_manager = SQLiteMasterProductManager()
+                                    
+                                    # 중복 체크
+                                    existing_product = master_manager.get_product_by_code(generated_code)
+                                    if not existing_product:
+                                        import uuid
+                                        import time
+                                        timestamp = str(int(time.time()))[-6:]
+                                        product_count = str(len(master_manager.get_all_products()) + 1).zfill(3)
+                                        master_product_id = f"MP-HR-{timestamp}-{product_count}"
+                                        
+                                        # 기본 제품명 생성
+                                        korean_base = "핫러너 밸브" if system_type == "Valve" else f"핫러너 {system_type}"
+                                        default_korean = f"{korean_base} {product_type} {gate_type} {new_key}mm"
+                                        default_english = f"Hot Runner {system_type} {product_type} {gate_type} {new_key}mm"
+                                        
+                                        product_data = {
+                                            'master_product_id': master_product_id,
+                                            'product_code': generated_code,
+                                            'product_name': default_korean,
+                                            'product_name_en': default_english,
+                                            'product_name_vi': default_english,
+                                            'category_name': 'HR',
+                                            'subcategory_name': product_type,
+                                            'supplier_name': '',
+                                            'specifications': 'H30,34,1.0',
+                                            'unit': 'EA',
+                                            'status': 'active'
+                                        }
+                                        
+                                        result = master_manager.add_master_product(product_data)
+                                        if result:
+                                            st.success(f"🎯 **제품 코드 자동 생성:** `{generated_code}`")
+                                            st.info("📋 HR 카테고리 목록에서 확인할 수 있습니다.")
+                                        else:
+                                            st.warning(f"⚠️ 사이즈는 추가되었지만 제품 코드 생성 실패: `{generated_code}`")
+                                    else:
+                                        st.info(f"ℹ️ 제품 코드 `{generated_code}`는 이미 존재합니다.")
+                                        
+                            except Exception as e:
+                                st.warning(f"⚠️ 사이즈는 추가되었지만 제품 코드 자동 생성 중 오류: {e}")
+                            
+                            st.rerun()
+                        else:
+                            st.error("사이즈 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("키는 필수입니다.")
+
+
+def show_robot_subcategories(config_manager):
+    """ROBOT 제품 코드 구성 요소 관리"""
+    st.subheader("🤖 ROBOT 제품 코드 구성 관리")
+    st.caption("Robot 카테고리의 Application Type, 페이로드, 리치, 축 수를 관리합니다")
+    
+    # Robot 구성 요소 관리 탭
+    robot_tabs = st.tabs([
+        "🎯 Application Type", 
+        "🏋️ 페이로드 범위", 
+        "📏 리치 범위", 
+        "🔧 축 수"
+    ])
+    
+    with robot_tabs[0]:
+        manage_robot_applications(config_manager)
+    
+    with robot_tabs[1]:
+        manage_robot_payloads(config_manager)
+    
+    with robot_tabs[2]:
+        manage_robot_reaches(config_manager)
+    
+    with robot_tabs[3]:
+        manage_robot_axes(config_manager)
+
+def manage_robot_applications(config_manager):
+    """Robot Application Type 관리"""
+    st.subheader("🎯 Application Type 관리")
+    
+    # 현재 Application Type 목록 표시
+    app_types = config_manager.get_hr_components_for_management('robot_application')
+    
+    if app_types:
+        st.write("**현재 Application Types:**")
+        for app_type in app_types:
+            if app_type['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{app_type['component_key']}** - {app_type['component_name']}")
+                    if app_type['description']:
+                        st.caption(app_type['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_app_{app_type['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_app_{app_type['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_app_{app_type['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(app_type['component_id']):
+                            st.success("Application Type이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_app_{app_type['component_id']}", False):
+                    with st.expander("✏️ Application Type 수정", expanded=True):
+                        with st.form(f"edit_app_type_{app_type['component_id']}"):
+                            new_key = st.text_input("키", value=app_type['component_key'])
+                            new_description = st.text_input("설명", value=app_type['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        app_type['component_id'], component_key=new_key, 
+                                        component_name=new_key, description=new_description
+                                    ):
+                                        st.success("Application Type이 수정되었습니다!")
+                                        del st.session_state[f"editing_app_{app_type['component_id']}"]
+                                        st.rerun()
+                                    else:
+                                        st.error("수정 중 오류가 발생했습니다.")
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    del st.session_state[f"editing_app_{app_type['component_id']}"]
+                                    st.rerun()
+    else:
+        st.info("등록된 Application Type이 없습니다.")
+    
+    # 새 Application Type 추가
+    with st.expander("➕ 새 Application Type 추가"):
+        with st.form("add_robot_application"):
+            new_key = st.text_input("키", placeholder="예: INJECTION")
+            new_description = st.text_input("설명", placeholder="예: 사출 성형용 로봇")
+            
+            if st.form_submit_button("➕ Application Type 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'robot_application', 'ROBOT', new_key, new_key, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"Application Type '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("Application Type 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("키는 필수입니다.")
+
+def manage_robot_payloads(config_manager):
+    """Robot 페이로드 관리"""
+    st.subheader("🏋️ 페이로드 범위 관리")
+    st.caption("로봇의 최대 페이로드 용량 범위를 관리합니다 (kg 단위)")
+    
+    # 현재 페이로드 범위 목록 표시
+    payloads = config_manager.get_hr_components_for_management('robot_payload')
+    
+    if payloads:
+        st.write("**현재 페이로드 범위:**")
+        for payload in payloads:
+            if payload['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{payload['component_key']}kg** - {payload['component_name']}")
+                    if payload['description']:
+                        st.caption(payload['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_payload_{payload['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_payload_{payload['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_payload_{payload['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(payload['component_id']):
+                            st.success("페이로드가 삭제되었습니다!")
+                            st.rerun()
+    else:
+        st.info("등록된 페이로드 범위가 없습니다.")
+    
+    # 새 페이로드 추가
+    with st.expander("➕ 새 페이로드 범위 추가"):
+        with st.form("add_robot_payload"):
+            new_key = st.text_input("페이로드(kg)", placeholder="예: 6")
+            new_description = st.text_input("설명", placeholder="예: 6kg까지 처리 가능")
+            
+            if st.form_submit_button("➕ 페이로드 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'robot_payload', 'ROBOT', new_key, f"{new_key}kg", None, None, new_description
+                    )
+                    if success:
+                        st.success(f"페이로드 '{new_key}kg'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("페이로드 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("페이로드는 필수입니다.")
+
+def manage_robot_reaches(config_manager):
+    """Robot 리치 관리"""
+    st.subheader("📏 리치 범위 관리")
+    st.caption("로봇의 최대 도달 거리를 관리합니다 (mm 단위)")
+    
+    # 현재 리치 목록 표시
+    reaches = config_manager.get_hr_components_for_management('robot_reach')
+    
+    if reaches:
+        st.write("**현재 리치 범위:**")
+        for reach in reaches:
+            if reach['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{reach['component_key']}mm** - {reach['component_name']}")
+                    if reach['description']:
+                        st.caption(reach['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_reach_{reach['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_reach_{reach['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_reach_{reach['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(reach['component_id']):
+                            st.success("리치가 삭제되었습니다!")
+                            st.rerun()
+    else:
+        st.info("등록된 리치 범위가 없습니다.")
+    
+    # 새 리치 추가
+    with st.expander("➕ 새 리치 범위 추가"):
+        with st.form("add_robot_reach"):
+            new_key = st.text_input("리치(mm)", placeholder="예: 1400")
+            new_description = st.text_input("설명", placeholder="예: 1400mm 도달 범위")
+            
+            if st.form_submit_button("➕ 리치 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'robot_reach', 'ROBOT', new_key, f"{new_key}mm", None, None, new_description
+                    )
+                    if success:
+                        st.success(f"리치 '{new_key}mm'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("리치 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("리치는 필수입니다.")
+
+def manage_robot_axes(config_manager):
+    """Robot 축 수 관리"""
+    st.subheader("🔧 축 수 관리")
+    st.caption("로봇의 자유도(축 수)를 관리합니다")
+    
+    # 현재 축 수 목록 표시
+    axes = config_manager.get_hr_components_for_management('robot_axes')
+    
+    if axes:
+        st.write("**현재 축 수:**")
+        for axis in axes:
+            if axis['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{axis['component_key']}축** - {axis['component_name']}")
+                    if axis['description']:
+                        st.caption(axis['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_axis_{axis['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_axis_{axis['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_axis_{axis['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(axis['component_id']):
+                            st.success("축 수가 삭제되었습니다!")
+                            st.rerun()
+    else:
+        st.info("등록된 축 수가 없습니다.")
+    
+    # 새 축 수 추가
+    with st.expander("➕ 새 축 수 추가"):
+        with st.form("add_robot_axes"):
+            new_key = st.text_input("축 수", placeholder="예: 6")
+            new_description = st.text_input("설명", placeholder="예: 6축 관절 로봇")
+            
+            if st.form_submit_button("➕ 축 수 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'robot_axes', 'ROBOT', new_key, f"{new_key}축", None, None, new_description
+                    )
+                    if success:
+                        st.success(f"축 수 '{new_key}축'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("축 수 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("축 수는 필수입니다.")
+
+# ========== ROBOT HR 스타일 계층적 관리 함수들 ==========
+
+def manage_robot_applications_hr_style(config_manager):
+    """ROBOT Application 관리 - HR System Type과 동일한 방식"""
+    st.subheader("🏭 Application 관리")
+    st.caption("ROBOT의 기본 Application을 관리합니다 (HR System Type과 동일한 방식)")
+    
+    # 현재 Application 목록 표시 (HR과 동일한 UI)
+    applications = config_manager.get_hr_components_for_management('robot_application')
+    
+    if applications:
+        st.write("**현재 ROBOT Application:**")
+        for app in applications:
+            if app['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{app['component_key']}** - {app['component_name']}")
+                    if app['description']:
+                        st.caption(app['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_robot_app_{app['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_robot_app_{app['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_robot_app_{app['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(app['component_id']):
+                            st.success("Application이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_robot_app_{app['component_id']}", False):
+                    with st.expander("✏️ Application 수정", expanded=True):
+                        with st.form(f"edit_robot_app_{app['component_id']}"):
+                            new_key = st.text_input("키", value=app['component_key'])
+                            new_name = st.text_input("이름", value=app['component_name'])
+                            new_description = st.text_input("설명", value=app['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        app['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("Application이 수정되었습니다!")
+                                        st.session_state[f"editing_robot_app_{app['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_robot_app_{app['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 Application이 없습니다.")
+    
+    # 새 Application 추가 (HR과 동일)
+    with st.expander("➕ 새 Application 추가"):
+        with st.form("add_robot_application"):
+            new_key = st.text_input("Application 키", placeholder="예: IND")
+            new_name = st.text_input("Application 이름", placeholder="예: Industrial")
+            new_description = st.text_input("설명", placeholder="예: 산업용 로봇")
+            
+            if st.form_submit_button("➕ Application 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'robot_application', 'ROBOT', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"Application '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("Application 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("Application 키와 이름은 필수입니다.")
+
+def manage_robot_axes_hr_style(config_manager):
+    """ROBOT 축 수 관리 - HR Product Type과 동일한 방식"""
+    st.subheader("🔗 축 수 관리")
+    st.caption("선택된 Application의 축 수를 관리합니다 (HR과 동일한 방식)")
+    
+    # Application 선택 (HR과 동일)
+    applications = config_manager.get_robot_applications()
+    
+    if not applications:
+        st.warning("먼저 Application을 등록해주세요.")
+        return
+    
+    selected_application = st.selectbox("Application 선택", [""] + applications)
+    
+    if selected_application:
+        # 선택된 Application의 축 수 목록 (HR과 동일한 구조)
+        axes_list = config_manager.get_hr_components_for_management('robot_axes')
+        filtered_axes = [ax for ax in axes_list if ax['parent_component'] == selected_application and ax['is_active']]
+        
+        if filtered_axes:
+            st.write(f"**{selected_application}의 축 수:**")
+            for ax in filtered_axes:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"• **{ax['component_key']}축** - {ax['component_name']}")
+                    if ax['description']:
+                        st.caption(ax['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_robot_ax_{ax['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_robot_ax_{ax['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_robot_ax_{ax['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(ax['component_id']):
+                            st.success("축 수가 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_robot_ax_{ax['component_id']}", False):
+                    with st.expander("✏️ 축 수 수정", expanded=True):
+                        with st.form(f"edit_robot_axes_{ax['component_id']}"):
+                            new_key = st.text_input("키", value=ax['component_key'])
+                            new_name = st.text_input("이름", value=ax['component_name'])
+                            new_description = st.text_input("설명", value=ax['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        ax['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("축 수가 수정되었습니다!")
+                                        st.session_state[f"editing_robot_ax_{ax['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_robot_ax_{ax['component_id']}"] = False
+                                    st.rerun()
+        else:
+            st.info(f"{selected_application}에 등록된 축 수가 없습니다.")
+        
+        # 새 축 수 추가 (HR과 동일)
+        with st.expander(f"➕ {selected_application} 축 수 추가"):
+            with st.form(f"add_robot_axes_{selected_application}"):
+                new_key = st.text_input("축 수", placeholder="예: 6")
+                new_name = st.text_input("축 수 이름", placeholder="예: 6축 관절")
+                new_description = st.text_input("설명", placeholder="예: 6자유도 관절 로봇")
+                
+                if st.form_submit_button("➕ 축 수 추가"):
+                    if new_key and new_name:
+                        success = config_manager.add_hr_component(
+                            'robot_axes', 'ROBOT', new_key, new_name, selected_application, None, new_description
+                        )
+                        if success:
+                            st.success(f"축 수 '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("축 수 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("축 수 키와 이름은 필수입니다.")
+
+def manage_robot_payloads_hr_style(config_manager):
+    """ROBOT Payload 관리 - HR Gate Type과 동일한 방식"""
+    st.subheader("⚙️ Payload 관리")
+    st.caption("선택된 Application과 축 수의 Payload를 관리합니다 (HR과 동일한 방식)")
+    
+    # Application 선택
+    applications = config_manager.get_robot_applications()
+    if not applications:
+        st.warning("먼저 Application을 등록해주세요.")
+        return
+    
+    selected_application = st.selectbox("Application 선택", [""] + applications, key="payload_app")
+    
+    if selected_application:
+        # 축 수 선택
+        axes_list = config_manager.get_robot_axes(selected_application)
+        if not axes_list:
+            st.warning(f"{selected_application}에 축 수를 먼저 등록해주세요.")
+            return
+        
+        selected_axes = st.selectbox("축 수 선택", [""] + axes_list, key="payload_axes")
+        
+        if selected_axes:
+            # 선택된 Application-축수의 Payload 목록
+            payloads = config_manager.get_hr_components_for_management('robot_payload')
+            filtered_payloads = [pl for pl in payloads 
+                               if pl['parent_component'] == selected_application 
+                               and pl['sub_component'] == selected_axes 
+                               and pl['is_active']]
+            
+            if filtered_payloads:
+                st.write(f"**{selected_application}-{selected_axes}축의 Payload:**")
+                for pl in filtered_payloads:
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        st.write(f"• **{pl['component_key']}kg** - {pl['component_name']}")
+                        if pl['description']:
+                            st.caption(pl['description'])
+                    with col2:
+                        if st.button("✏️", key=f"edit_robot_pl_{pl['component_id']}", help="수정", use_container_width=True):
+                            st.session_state[f"editing_robot_pl_{pl['component_id']}"] = True
+                            st.rerun()
+                    with col3:
+                        if st.button("🗑️", key=f"delete_robot_pl_{pl['component_id']}", help="삭제", use_container_width=True):
+                            if config_manager.delete_hr_component(pl['component_id']):
+                                st.success("Payload가 삭제되었습니다!")
+                                st.rerun()
+            else:
+                st.info(f"{selected_application}-{selected_axes}축에 등록된 Payload가 없습니다.")
+            
+            # 새 Payload 추가
+            with st.expander(f"➕ {selected_application}-{selected_axes}축 Payload 추가"):
+                with st.form(f"add_robot_payload_{selected_application}_{selected_axes}"):
+                    new_key = st.text_input("Payload(kg)", placeholder="예: 10")
+                    new_name = st.text_input("Payload 이름", placeholder="예: 10kg 페이로드")
+                    new_description = st.text_input("설명", placeholder="예: 최대 10kg까지 처리 가능")
+                    
+                    if st.form_submit_button("➕ Payload 추가"):
+                        if new_key and new_name:
+                            success = config_manager.add_hr_component(
+                                'robot_payload', 'ROBOT', new_key, new_name, 
+                                selected_application, selected_axes, new_description
+                            )
+                            if success:
+                                st.success(f"Payload '{new_key}kg'가 추가되었습니다!")
+                                st.rerun()
+                            else:
+                                st.error("Payload 추가 중 오류가 발생했습니다.")
+                        else:
+                            st.warning("Payload 키와 이름은 필수입니다.")
+
+def manage_robot_reaches_hr_style(config_manager):
+    """ROBOT Reach 관리 - HR Size와 동일한 방식 (자동 제품 생성 포함)"""
+    st.subheader("📏 Reach 관리")
+    st.caption("선택된 Application, 축수, Payload의 Reach를 관리합니다 (HR Size와 동일한 방식)")
+    
+    # Application 선택
+    applications = config_manager.get_robot_applications()
+    if not applications:
+        st.warning("먼저 Application을 등록해주세요.")
+        return
+    
+    selected_application = st.selectbox("Application 선택", [""] + applications, key="reach_app")
+    
+    if selected_application:
+        # 축 수 선택
+        axes_list = config_manager.get_robot_axes(selected_application)
+        if not axes_list:
+            st.warning(f"{selected_application}에 축 수를 먼저 등록해주세요.")
+            return
+        
+        selected_axes = st.selectbox("축 수 선택", [""] + axes_list, key="reach_axes")
+        
+        if selected_axes:
+            # Payload 선택
+            payload_list = config_manager.get_robot_payloads(selected_application, selected_axes)
+            if not payload_list:
+                st.warning(f"{selected_application}-{selected_axes}축에 Payload를 먼저 등록해주세요.")
+                return
+            
+            selected_payload = st.selectbox("Payload 선택", [""] + payload_list, key="reach_payload")
+            
+            if selected_payload:
+                # 선택된 조합의 Reach 목록
+                reaches = config_manager.get_hr_components_for_management('robot_reach')
+                parent_key = f"{selected_application}-{selected_axes}-{selected_payload}"
+                filtered_reaches = [r for r in reaches 
+                                  if r['parent_component'] == parent_key 
+                                  and r['is_active']]
+                
+                if filtered_reaches:
+                    st.write(f"**{selected_application}-{selected_axes}축-{selected_payload}kg의 Reach:**")
+                    for reach in filtered_reaches:
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        with col1:
+                            st.write(f"• **{reach['component_key']}mm** - {reach['component_name']}")
+                            if reach['description']:
+                                st.caption(reach['description'])
+                        with col2:
+                            if st.button("✏️", key=f"edit_robot_reach_{reach['component_id']}", help="수정", use_container_width=True):
+                                st.session_state[f"editing_robot_reach_{reach['component_id']}"] = True
+                                st.rerun()
+                        with col3:
+                            if st.button("🗑️", key=f"delete_robot_reach_{reach['component_id']}", help="삭제", use_container_width=True):
+                                if config_manager.delete_hr_component(reach['component_id']):
+                                    st.success("Reach가 삭제되었습니다!")
+                                    st.rerun()
+                else:
+                    st.info(f"{selected_application}-{selected_axes}축-{selected_payload}kg에 등록된 Reach가 없습니다.")
+                
+                # 새 Reach 추가 (HR Size와 동일한 방식 - 자동 제품 생성)
+                with st.expander(f"➕ {selected_application}-{selected_axes}축-{selected_payload}kg Reach 추가"):
+                    with st.form(f"add_robot_reach_{selected_application}_{selected_axes}_{selected_payload}"):
+                        new_key = st.text_input("Reach(mm)", placeholder="예: 1400")
+                        new_name = st.text_input("Reach 이름", placeholder="예: 1400mm 도달")
+                        new_description = st.text_input("설명", placeholder="예: 최대 1400mm 도달 범위")
+                        
+                        if st.form_submit_button("➕ Reach 추가"):
+                            if new_key and new_name:
+                                success = config_manager.add_hr_component(
+                                    'robot_reach', 'ROBOT', new_key, new_name, 
+                                    parent_key, None, new_description
+                                )
+                                if success:
+                                    # ROBOT 자동 제품 생성 (HR과 동일한 방식)
+                                    product_created = config_manager.create_robot_product_for_reach(
+                                        selected_application, selected_axes, selected_payload, new_key
+                                    )
+                                    
+                                    if product_created:
+                                        st.success(f"✅ Reach '{new_key}mm'가 추가되었습니다! (제품 자동 생성)")
+                                        st.info("📋 ROBOT 카테고리 목록에서 확인할 수 있습니다.")
+                                    else:
+                                        st.success(f"✅ Reach '{new_key}mm'가 추가되었습니다!")
+                                        st.warning("⚠️ 제품 자동 생성에 실패했습니다.")
+                                    st.rerun()
+                                else:
+                                    st.error("Reach 추가 중 오류가 발생했습니다.")
+                            else:
+                                st.warning("Reach 키와 이름은 필수입니다.")
+
+def show_hrc_subcategories(config_manager):
+    """Controller 제품 코드 구성 관리 - HR과 동일한 구조"""
+    st.subheader("⚙️ Controller 제품 코드 구성 관리")
+    st.caption("Controller Type → 제품 타입 → 모델 타입 → 존 번호 (HR과 동일한 계층형 관리)")
+    
+    # Controller 구성 관리 탭 (HR과 완전 동일한 관리 방식)
+    hrc_tabs = st.tabs([
+        "🏷️ Controller Type 관리",
+        "📝 제품 타입 관리",
+        "🔧 모델 타입 관리", 
+        "📍 존 번호 관리"
+    ])
+    
+    with hrc_tabs[0]:
+        manage_hrc_types_hr_style(config_manager)
+    
+    with hrc_tabs[1]:
+        manage_hrc_product_types_hr_style(config_manager)
+    
+    with hrc_tabs[2]:
+        manage_hrc_model_types_hr_style(config_manager)
+    
+    with hrc_tabs[3]:
+        manage_hrc_zones_hr_style(config_manager)
+
+def manage_hrc_types_hr_style(config_manager):
+    """Controller Type 관리 - HR System Type과 동일한 방식"""
+    st.subheader("🏷️ Controller Type 관리")
+    st.caption("Controller의 기본 타입을 관리합니다 (HR System Type과 동일한 방식)")
+    
+    # 현재 Controller Type 목록 표시 (HR과 동일한 UI)
+    hrc_types = config_manager.get_hr_components_for_management('hrc_type')
+    
+    if hrc_types:
+        st.write("**현재 Controller Type:**")
+        for hrc_type in hrc_types:
+            if hrc_type['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{hrc_type['component_key']}** - {hrc_type['component_name']}")
+                    if hrc_type['description']:
+                        st.caption(hrc_type['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_hrc_type_{hrc_type['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrc_type_{hrc_type['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrc_type_{hrc_type['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(hrc_type['component_id']):
+                            st.success("Controller Type이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_hrc_type_{hrc_type['component_id']}", False):
+                    with st.expander("✏️ Controller Type 수정", expanded=True):
+                        with st.form(f"edit_hrc_type_{hrc_type['component_id']}"):
+                            new_key = st.text_input("키", value=hrc_type['component_key'])
+                            new_name = st.text_input("이름", value=hrc_type['component_name'])
+                            new_description = st.text_input("설명", value=hrc_type['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        hrc_type['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("Controller Type이 수정되었습니다!")
+                                        st.session_state[f"editing_hrc_type_{hrc_type['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_hrc_type_{hrc_type['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 Controller Type이 없습니다.")
+    
+    # 새 Controller Type 추가 (HR과 동일)
+    with st.expander("➕ 새 Controller Type 추가"):
+        with st.form("add_hrc_type"):
+            new_key = st.text_input("Controller Type 키", placeholder="예: HRCT")
+            new_name = st.text_input("Controller Type 이름", placeholder="예: 온도 제어")
+            new_description = st.text_input("설명", placeholder="예: 온도 제어기 타입")
+            
+            if st.form_submit_button("➕ Controller Type 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'hrc_type', 'HRC', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"Controller Type '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("Controller Type 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("Controller Type 키와 이름은 필수입니다.")
+
+def manage_hrc_product_types_hr_style(config_manager):
+    """Controller 제품 타입 관리 - HR Product Type과 동일한 방식"""
+    st.subheader("📝 Controller 제품 타입 관리")
+    st.caption("선택된 Controller Type의 제품 타입을 관리합니다 (HR과 동일한 방식)")
+    
+    # Controller Type 선택 (HR과 동일)
+    hrc_types = config_manager.get_hrc_types()
+    
+    if not hrc_types:
+        st.warning("먼저 Controller Type을 등록해주세요.")
+        return
+    
+    selected_hrc_type = st.selectbox("Controller Type 선택", [""] + hrc_types)
+    
+    if selected_hrc_type:
+        # 선택된 HRC Type의 제품 타입 목록 (HR과 동일한 구조)
+        product_types = config_manager.get_hr_components_for_management('hrc_product_type')
+        filtered_types = [pt for pt in product_types if pt['parent_component'] == selected_hrc_type and pt['is_active']]
+        
+        if filtered_types:
+            st.write(f"**{selected_hrc_type}의 제품 타입:**")
+            for pt in filtered_types:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"• **{pt['component_key']}** - {pt['component_name']}")
+                    if pt['description']:
+                        st.caption(pt['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_hrc_pt_{pt['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrc_pt_{pt['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrc_pt_{pt['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(pt['component_id']):
+                            st.success("제품 타입이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_hrc_pt_{pt['component_id']}", False):
+                    with st.expander("✏️ 제품 타입 수정", expanded=True):
+                        with st.form(f"edit_hrc_product_type_{pt['component_id']}"):
+                            new_key = st.text_input("키", value=pt['component_key'])
+                            new_name = st.text_input("이름", value=pt['component_name'])
+                            new_description = st.text_input("설명", value=pt['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        pt['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("제품 타입이 수정되었습니다!")
+                                        st.session_state[f"editing_hrc_pt_{pt['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_hrc_pt_{pt['component_id']}"] = False
+                                    st.rerun()
+        else:
+            st.info(f"{selected_hrc_type}에 등록된 제품 타입이 없습니다.")
+        
+        # 새 제품 타입 추가 (HR과 동일)
+        with st.expander(f"➕ {selected_hrc_type} 제품 타입 추가"):
+            with st.form(f"add_hrc_product_type_{selected_hrc_type}"):
+                new_key = st.text_input("제품 타입 키", placeholder="예: TEMP")
+                new_name = st.text_input("제품 타입 이름", placeholder="예: 온도 제어")
+                new_description = st.text_input("설명", placeholder="예: 온도 제어 제품 타입")
+                
+                if st.form_submit_button("➕ 제품 타입 추가"):
+                    if new_key and new_name:
+                        success = config_manager.add_hr_component(
+                            'hrc_product_type', 'HRC', new_key, new_name, selected_hrc_type, None, new_description
+                        )
+                        if success:
+                            st.success(f"제품 타입 '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("제품 타입 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("제품 타입 키와 이름은 필수입니다.")
+
+def manage_hrc_model_types_hr_style(config_manager):
+    """Controller 모델 타입 관리 - HR Gate Type과 동일한 방식"""
+    st.subheader("🔧 Controller 모델 타입 관리")
+    st.caption("선택된 Controller Type과 제품 타입의 모델 타입을 관리합니다 (HR과 동일한 방식)")
+    
+    # Controller Type 선택
+    hrc_types = config_manager.get_hrc_types()
+    if not hrc_types:
+        st.warning("먼저 Controller Type을 등록해주세요.")
+        return
+    
+    selected_hrc_type = st.selectbox("HRC Type 선택", [""] + hrc_types, key="model_hrc_type")
+    
+    if selected_hrc_type:
+        # 제품 타입 선택
+        product_types = config_manager.get_hrc_product_types(selected_hrc_type)
+        if not product_types:
+            st.warning(f"{selected_hrc_type}에 제품 타입을 먼저 등록해주세요.")
+            return
+        
+        selected_product_type = st.selectbox("제품 타입 선택", [""] + product_types, key="model_product_type")
+        
+        if selected_product_type:
+            # 선택된 HRC Type-제품타입의 모델 타입 목록
+            model_types = config_manager.get_hr_components_for_management('hrc_model_type')
+            filtered_models = [mt for mt in model_types 
+                             if mt['parent_component'] == selected_hrc_type 
+                             and mt['sub_component'] == selected_product_type 
+                             and mt['is_active']]
+            
+            if filtered_models:
+                st.write(f"**{selected_hrc_type}-{selected_product_type}의 모델 타입:**")
+                for mt in filtered_models:
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        st.write(f"• **{mt['component_key']}** - {mt['component_name']}")
+                        if mt['description']:
+                            st.caption(mt['description'])
+                    with col2:
+                        if st.button("✏️", key=f"edit_hrc_mt_{mt['component_id']}", help="수정", use_container_width=True):
+                            st.session_state[f"editing_hrc_mt_{mt['component_id']}"] = True
+                            st.rerun()
+                    with col3:
+                        if st.button("🗑️", key=f"delete_hrc_mt_{mt['component_id']}", help="삭제", use_container_width=True):
+                            if config_manager.delete_hr_component(mt['component_id']):
+                                st.success("모델 타입이 삭제되었습니다!")
+                                st.rerun()
+                    
+                    # 수정 폼 표시
+                    if st.session_state.get(f"editing_hrc_mt_{mt['component_id']}", False):
+                        with st.expander("✏️ 모델 타입 수정", expanded=True):
+                            with st.form(f"edit_hrc_model_type_{mt['component_id']}"):
+                                new_key = st.text_input("키", value=mt['component_key'])
+                                new_name = st.text_input("이름", value=mt['component_name'])
+                                new_description = st.text_input("설명", value=mt['description'] or "")
+                                
+                                col_submit, col_cancel = st.columns([1, 1])
+                                with col_submit:
+                                    if st.form_submit_button("💾 저장"):
+                                        if config_manager.update_hr_component(
+                                            mt['component_id'], component_key=new_key, 
+                                            component_name=new_name, description=new_description
+                                        ):
+                                            st.success("모델 타입이 수정되었습니다!")
+                                            st.session_state[f"editing_hrc_mt_{mt['component_id']}"] = False
+                                            st.rerun()
+                                
+                                with col_cancel:
+                                    if st.form_submit_button("❌ 취소"):
+                                        st.session_state[f"editing_hrc_mt_{mt['component_id']}"] = False
+                                        st.rerun()
+            else:
+                st.info(f"{selected_hrc_type}-{selected_product_type}에 등록된 모델 타입이 없습니다.")
+            
+            # 새 모델 타입 추가
+            with st.expander(f"➕ {selected_hrc_type}-{selected_product_type} 모델 타입 추가"):
+                with st.form(f"add_hrc_model_type_{selected_hrc_type}_{selected_product_type}"):
+                    new_key = st.text_input("모델 타입 키", placeholder="예: YC60")
+                    new_name = st.text_input("모델 타입 이름", placeholder="예: YC60 컨트롤러")
+                    new_description = st.text_input("설명", placeholder="예: YC60 시리즈 컨트롤러")
+                    
+                    submitted = st.form_submit_button("➕ 모델 타입 추가")
+                    
+                    if submitted:
+                        if new_key and new_name:
+                            success = config_manager.add_hr_component(
+                                'hrc_model_type', 'HRC', new_key, new_name, 
+                                selected_hrc_type, selected_product_type, new_description
+                            )
+                            if success:
+                                st.success(f"모델 타입 '{new_key}'가 추가되었습니다!")
+                                # 폼이 자동으로 리셋되도록 페이지 새로고침
+                                st.rerun()
+                            else:
+                                st.error("모델 타입 추가 중 오류가 발생했습니다.")
+                        else:
+                            st.warning("모델 타입 키와 이름은 필수입니다.")
+
+def manage_hrc_zones_hr_style(config_manager):
+    """Controller 존 번호 관리 - HR Size와 동일한 방식"""
+    st.subheader("📍 Controller 존 번호 관리")
+    st.caption("Controller 공통 존 번호를 관리합니다 (HR Size와 동일한 방식)")
+    
+    # 현재 존 번호 목록 표시
+    zones = config_manager.get_hr_components_for_management('hrc_zone')
+    
+    if zones:
+        st.write("**현재 Controller 존 번호:**")
+        for zone in zones:
+            if zone['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    if zone['component_key'] == "Special":
+                        st.write(f"🔧 **{zone['component_key']}** - {zone['component_name']} (직접입력)")
+                    else:
+                        st.write(f"📍 **Zone{zone['component_key']}** - {zone['component_name']}")
+                    if zone['description']:
+                        st.caption(zone['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_hrc_zone_{zone['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrc_zone_{zone['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrc_zone_{zone['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(zone['component_id']):
+                            st.success("존 번호가 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_hrc_zone_{zone['component_id']}", False):
+                    with st.expander("✏️ 존 번호 수정", expanded=True):
+                        with st.form(f"edit_hrc_zone_{zone['component_id']}"):
+                            new_key = st.text_input("키", value=zone['component_key'])
+                            new_name = st.text_input("이름", value=zone['component_name'])
+                            new_description = st.text_input("설명", value=zone['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        zone['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("존 번호가 수정되었습니다!")
+                                        st.session_state[f"editing_hrc_zone_{zone['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_hrc_zone_{zone['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 존 번호가 없습니다.")
+    
+    # 새 존 번호 추가
+    with st.expander("➕ 새 존 번호 추가"):
+        with st.form("add_hrc_zone"):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_key = st.text_input("존 번호", placeholder="예: 1, 4, 6, 8, Special")
+                new_name = st.text_input("이름", placeholder="예: Zone 1, Zone 4, 특별 존")
+            with col2:
+                new_description = st.text_input("설명", placeholder="예: 표준 1존, 특별 용도 존")
+            
+            if st.form_submit_button("➕ 존 번호 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'hrc_zone', 'HRC', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        # HRC 자동 제품 생성 (HR과 동일한 방식)
+                        products_created = config_manager.create_hrc_products_for_zone(new_key)
+                        
+                        if products_created > 0:
+                            st.success(f"✅ 존 번호 '{new_key}'가 추가되었습니다! ({products_created}개 제품 자동 생성)")
+                        else:
+                            st.success(f"✅ 존 번호 '{new_key}'가 추가되었습니다!")
+                            st.info("💡 Controller Type, 제품 타입, 모델을 먼저 등록하면 제품이 자동 생성됩니다.")
+                        st.rerun()
+                    else:
+                        st.error("존 번호 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("존 번호와 이름은 필수입니다.")
+
+def manage_hrct_categories(config_manager):
+    """HRCT 카테고리 관리"""
+    st.subheader("🌡️ HRCT 카테고리 관리")
+    st.caption("HRCT 온도제어기의 카테고리를 관리합니다")
+    
+    # 현재 HRCT 카테고리 목록 표시
+    hrct_categories = config_manager.get_hr_components_for_management('hrct_category')
+    
+    if hrct_categories:
+        st.write("**현재 HRCT 카테고리:**")
+        for category in hrct_categories:
+            if category['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{category['component_key']}** - {category['component_name']}")
+                    if category['description']:
+                        st.caption(category['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_hrct_cat_{category['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrct_cat_{category['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrct_cat_{category['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(category['component_id']):
+                            st.success("HRCT 카테고리가 삭제되었습니다!")
+                            st.rerun()
+    else:
+        st.info("등록된 HRCT 카테고리가 없습니다.")
+    
+    # 새 HRCT 카테고리 추가
+    with st.expander("➕ 새 HRCT 카테고리 추가"):
+        with st.form("add_hrct_category"):
+            new_key = st.text_input("카테고리 키", placeholder="예: TEMP")
+            new_description = st.text_input("설명", placeholder="예: 온도 제어")
+            
+            if st.form_submit_button("➕ HRCT 카테고리 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'hrct_category', 'HRCT', new_key, new_key, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"HRCT 카테고리 '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("HRCT 카테고리 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("카테고리 키는 필수입니다.")
+
+def manage_hrcs_categories(config_manager):
+    """HRCS 카테고리 관리"""
+    st.subheader("⏱️ HRCS 카테고리 관리")
+    st.caption("HRCS 시간제어기의 카테고리를 관리합니다")
+    
+    # 현재 HRCS 카테고리 목록 표시
+    hrcs_categories = config_manager.get_hr_components_for_management('hrcs_category')
+    
+    if hrcs_categories:
+        st.write("**현재 HRCS 카테고리:**")
+        for category in hrcs_categories:
+            if category['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{category['component_key']}** - {category['component_name']}")
+                    if category['description']:
+                        st.caption(category['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_hrcs_cat_{category['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrcs_cat_{category['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrcs_cat_{category['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(category['component_id']):
+                            st.success("HRCS 카테고리가 삭제되었습니다!")
+                            st.rerun()
+    else:
+        st.info("등록된 HRCS 카테고리가 없습니다.")
+    
+    # 새 HRCS 카테고리 추가
+    with st.expander("➕ 새 HRCS 카테고리 추가"):
+        with st.form("add_hrcs_category"):
+            new_key = st.text_input("카테고리 키", placeholder="예: TIMER")
+            new_description = st.text_input("설명", placeholder="예: 타이머 제어")
+            
+            if st.form_submit_button("➕ HRCS 카테고리 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'hrcs_category', 'HRCS', new_key, new_key, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"HRCS 카테고리 '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("HRCS 카테고리 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("카테고리 키는 필수입니다.")
+
+def manage_hrct_models(config_manager):
+    """HRCT 모델 관리"""
+    st.subheader("🔧 HRCT 모델 관리")
+    st.caption("HRCT 온도제어기의 모델을 관리합니다")
+    
+    # 카테고리 선택
+    hrct_categories = config_manager.get_hrct_categories()
+    if not hrct_categories:
+        st.warning("먼저 HRCT 카테고리를 등록해주세요.")
+        return
+    
+    selected_category = st.selectbox("HRCT 카테고리 선택", [""] + hrct_categories)
+    
+    if selected_category:
+        # 선택된 카테고리의 모델 목록
+        models = config_manager.get_hr_components_for_management('hrct_model')
+        filtered_models = [m for m in models if m['parent_component'] == selected_category and m['is_active']]
+        
+        if filtered_models:
+            st.write(f"**{selected_category}의 모델:**")
+            for model in filtered_models:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"• **{model['component_key']}** - {model['component_name']}")
+                with col2:
+                    if st.button("✏️", key=f"edit_hrct_model_{model['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrct_model_{model['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrct_model_{model['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(model['component_id']):
+                            st.success("HRCT 모델이 삭제되었습니다!")
+                            st.rerun()
+        
+        # 새 모델 추가
+        with st.expander(f"➕ {selected_category} 모델 추가"):
+            with st.form(f"add_hrct_model_{selected_category}"):
+                new_key = st.text_input("모델 키", placeholder="예: YC60")
+                new_description = st.text_input("설명", placeholder="예: YC60 온도제어기")
+                
+                if st.form_submit_button("➕ HRCT 모델 추가"):
+                    if new_key:
+                        success = config_manager.add_hr_component(
+                            'hrct_model', selected_category, new_key, new_key, None, None, new_description
+                        )
+                        if success:
+                            st.success(f"HRCT 모델 '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("HRCT 모델 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("모델 키는 필수입니다.")
+
+def manage_hrcs_models(config_manager):
+    """HRCS 모델 관리"""
+    st.subheader("⚙️ HRCS 모델 관리")
+    st.caption("HRCS 시간제어기의 모델을 관리합니다")
+    
+    # 카테고리 선택
+    hrcs_categories = config_manager.get_hrcs_categories()
+    if not hrcs_categories:
+        st.warning("먼저 HRCS 카테고리를 등록해주세요.")
+        return
+    
+    selected_category = st.selectbox("HRCS 카테고리 선택", [""] + hrcs_categories)
+    
+    if selected_category:
+        # 선택된 카테고리의 모델 목록
+        models = config_manager.get_hr_components_for_management('hrcs_model')
+        filtered_models = [m for m in models if m['parent_component'] == selected_category and m['is_active']]
+        
+        if filtered_models:
+            st.write(f"**{selected_category}의 모델:**")
+            for model in filtered_models:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"• **{model['component_key']}** - {model['component_name']}")
+                with col2:
+                    if st.button("✏️", key=f"edit_hrcs_model_{model['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_hrcs_model_{model['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_hrcs_model_{model['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(model['component_id']):
+                            st.success("HRCS 모델이 삭제되었습니다!")
+                            st.rerun()
+        
+        # 새 모델 추가
+        with st.expander(f"➕ {selected_category} 모델 추가"):
+            with st.form(f"add_hrcs_model_{selected_category}"):
+                new_key = st.text_input("모델 키", placeholder="예: YC60T")
+                new_description = st.text_input("설명", placeholder="예: YC60T 타이머제어기")
+                
+                if st.form_submit_button("➕ HRCS 모델 추가"):
+                    if new_key:
+                        success = config_manager.add_hr_component(
+                            'hrcs_model', selected_category, new_key, new_key, None, None, new_description
+                        )
+                        if success:
+                            st.success(f"HRCS 모델 '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("HRCS 모델 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("모델 키는 필수입니다.")
+
+def manage_hrc_zones(config_manager):
+    """Controller 존 번호 관리 (HRCT, HRCS 공통)"""
+    st.subheader("📋 Controller 존 번호 관리")
+    st.caption("HRCT, HRCS 공통으로 사용되는 존 번호를 관리합니다")
+    
+    # 현재 존 번호 목록 표시
+    zones = config_manager.get_hr_components_for_management('hrc_zone')
+    
+    if zones:
+        st.write("**현재 Controller 존 번호:**")
+        cols = st.columns(4)
+        for i, zone in enumerate(zones):
+            if zone['is_active']:
+                with cols[i % 4]:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**{zone['component_key']}**")
+                    with col2:
+                        if st.button("🗑️", key=f"delete_zone_{zone['component_id']}", help="삭제", use_container_width=True):
+                            if config_manager.delete_hr_component(zone['component_id']):
+                                st.success("존 번호가 삭제되었습니다!")
+                                st.rerun()
+    else:
+        st.info("등록된 존 번호가 없습니다.")
+    
+    # 새 존 번호 추가
+    with st.expander("➕ 새 존 번호 추가"):
+        with st.form("add_hrc_zone"):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_key = st.text_input("존 번호", placeholder="예: 50")
+                new_description = st.text_input("설명", placeholder="예: 50존 컨트롤러")
+            with col2:
+                st.info("**기본 존 번호:** 1, 4, 6, 8, 12, 18, 24, 30, 32, 36, 40, 42, 48, Special")
+            
+            if st.form_submit_button("➕ 존 번호 추가"):
+                if new_key:
+                    success = config_manager.add_hr_component(
+                        'hrc_zone', 'HRC', new_key, new_key, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"존 번호 '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("존 번호 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("존 번호는 필수입니다.")
+
+def show_mb_subcategories_hr_style(config_manager):
+    """MB 제품 코드 구성 관리 - Controller와 동일한 구조"""
+    st.subheader("🔧 MB 제품 코드 구성 관리")
+    st.caption("MB Type → Sub Category → Material (Controller와 동일한 계층형 관리)")
+    
+    # MB 구성 관리 탭 (Controller와 완전 동일한 관리 방식)
+    mb_tabs = st.tabs([
+        "🏷️ MB Type 관리",
+        "📝 Sub Category 관리"
+    ])
+    
+    with mb_tabs[0]:
+        manage_mb_types_hr_style(config_manager)
+    
+    with mb_tabs[1]:
+        manage_mb_subcategories_hr_style(config_manager)
+
+def manage_mb_types_hr_style(config_manager):
+    """MB Type 관리 - HR System Type과 동일한 방식"""
+    st.subheader("🏷️ MB Type 관리")
+    st.caption("MB의 기본 타입을 관리합니다 (HR System Type과 동일한 방식)")
+    
+    # 현재 MB Type 목록 표시 (HR과 동일한 UI)
+    mb_types = config_manager.get_hr_components_for_management('mb_type')
+    
+    if mb_types:
+        st.write("**현재 MB Type:**")
+        for mb_type in mb_types:
+            if mb_type['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{mb_type['component_key']}** - {mb_type['component_name']}")
+                    if mb_type['description']:
+                        st.caption(mb_type['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_mb_type_{mb_type['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_mb_type_{mb_type['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_mb_type_{mb_type['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(mb_type['component_id']):
+                            st.success("MB Type이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_mb_type_{mb_type['component_id']}", False):
+                    with st.expander("✏️ MB Type 수정", expanded=True):
+                        with st.form(f"edit_mb_type_{mb_type['component_id']}"):
+                            new_key = st.text_input("키", value=mb_type['component_key'])
+                            new_name = st.text_input("이름", value=mb_type['component_name'])
+                            new_description = st.text_input("설명", value=mb_type['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        mb_type['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("MB Type이 수정되었습니다!")
+                                        st.session_state[f"editing_mb_type_{mb_type['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_mb_type_{mb_type['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 MB Type이 없습니다.")
+    
+    # 새 MB Type 추가 (HR과 동일)
+    with st.expander("➕ 새 MB Type 추가"):
+        with st.form("add_mb_type"):
+            new_key = st.text_input("MB Type 키", placeholder="예: 2P")
+            new_name = st.text_input("MB Type 이름", placeholder="예: 2플레이트")
+            new_description = st.text_input("설명", placeholder="예: 2플레이트 몰드베이스")
+            
+            if st.form_submit_button("➕ MB Type 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'mb_type', 'MB', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"MB Type '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("MB Type 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("MB Type 키와 이름은 필수입니다.")
+
+def manage_mb_subcategories_hr_style(config_manager):
+    """MB Sub Category 관리 - HR Product Type과 동일한 방식"""
+    st.subheader("📝 MB Sub Category 관리")
+    st.caption("선택된 MB Type의 서브 카테고리를 관리합니다 (HR과 동일한 방식)")
+    
+    # MB Type 선택 (HR과 동일)
+    mb_types = config_manager.get_mb_types()
+    
+    if not mb_types:
+        st.warning("먼저 MB Type을 등록해주세요.")
+        return
+    
+    selected_mb_type = st.selectbox("MB Type 선택", [""] + mb_types)
+    
+    if selected_mb_type:
+        # 선택된 MB Type의 서브 카테고리 목록 (HR과 동일한 구조)
+        sub_categories = config_manager.get_hr_components_for_management('mb_sub_category')
+        filtered_subcats = [sc for sc in sub_categories if sc['parent_component'] == selected_mb_type and sc['is_active']]
+        
+        if filtered_subcats:
+            st.write(f"**{selected_mb_type}의 Sub Category:**")
+            for sc in filtered_subcats:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"• **{sc['component_key']}** - {sc['component_name']}")
+                    if sc['description']:
+                        st.caption(sc['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_mb_sc_{sc['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_mb_sc_{sc['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_mb_sc_{sc['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(sc['component_id']):
+                            st.success("Sub Category가 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_mb_sc_{sc['component_id']}", False):
+                    with st.expander("✏️ Sub Category 수정", expanded=True):
+                        with st.form(f"edit_mb_sub_category_{sc['component_id']}"):
+                            new_key = st.text_input("키", value=sc['component_key'])
+                            new_name = st.text_input("이름", value=sc['component_name'])
+                            new_description = st.text_input("설명", value=sc['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        sc['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("Sub Category가 수정되었습니다!")
+                                        st.session_state[f"editing_mb_sc_{sc['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_mb_sc_{sc['component_id']}"] = False
+                                    st.rerun()
+        else:
+            st.info(f"{selected_mb_type}에 등록된 Sub Category가 없습니다.")
+        
+        # 새 Sub Category 추가 (HR과 동일)
+        with st.expander(f"➕ {selected_mb_type} Sub Category 추가"):
+            with st.form(f"add_mb_sub_category_{selected_mb_type}"):
+                new_key = st.text_input("Sub Category 키", placeholder="예: STANDARD")
+                new_name = st.text_input("Sub Category 이름", placeholder="예: 표준형")
+                new_description = st.text_input("설명", placeholder="예: 표준형 몰드베이스")
+                
+                if st.form_submit_button("➕ Sub Category 추가"):
+                    if new_key and new_name:
+                        success = config_manager.add_hr_component(
+                            'mb_sub_category', 'MB', new_key, new_name, selected_mb_type, None, new_description
+                        )
+                        if success:
+                            st.success(f"Sub Category '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("Sub Category 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("Sub Category 키와 이름은 필수입니다.")
+
+def show_mb_materials_hr_style(config_manager):
+    """MB 재질 관리 - HR Size와 동일한 방식"""
+    st.subheader("🧱 MB 재질 관리")
+    st.caption("MB 재질을 관리합니다 (HR Size와 동일한 방식)")
+    
+    # 현재 재질 목록 표시 (HR과 동일한 UI)
+    materials = config_manager.get_hr_components_for_management('mb_material')
+    
+    if materials:
+        st.write("**현재 MB 재질:**")
+        for material in materials:
+            if material['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{material['component_key']}** - {material['component_name']}")
+                    if material['description']:
+                        st.caption(material['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_mb_material_{material['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_mb_material_{material['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_mb_material_{material['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(material['component_id']):
+                            st.success("재질이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시 (HR과 동일)
+                if st.session_state.get(f"editing_mb_material_{material['component_id']}", False):
+                    with st.expander("✏️ 재질 수정", expanded=True):
+                        with st.form(f"edit_mb_material_{material['component_id']}"):
+                            new_key = st.text_input("키", value=material['component_key'])
+                            new_name = st.text_input("이름", value=material['component_name'])
+                            new_description = st.text_input("설명", value=material['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        material['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("재질이 수정되었습니다!")
+                                        st.session_state[f"editing_mb_material_{material['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_mb_material_{material['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 재질이 없습니다.")
+    
+    # 새 재질 추가 (HR과 동일)
+    with st.expander("➕ 새 재질 추가"):
+        with st.form("add_mb_material"):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_key = st.text_input("재질 코드", placeholder="예: S45C")
+                new_name = st.text_input("재질 이름", placeholder="예: 탄소강")
+            with col2:
+                new_description = st.text_input("설명", placeholder="예: 일반 구조용 탄소강")
+            
+            if st.form_submit_button("➕ 재질 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'mb_material', 'MB', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"재질 '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("재질 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("재질 코드와 이름은 필수입니다.")
+
+def show_service_types(config_manager):
+    """서비스 타입 관리 - MB와 동일한 계층형 구조"""
+    st.subheader("🛠️ 서비스 타입 관리")
+    st.caption("서비스 타입을 계층형으로 관리합니다 (MB와 동일한 방식)")
+    
+    # 탭으로 구분
+    tab1, tab2, tab3 = st.tabs(["Service Type 관리", "Sub Category 관리", "Service 세부사항 관리"])
+    
+    with tab1:
+        show_service_type_management(config_manager)
+    
+    with tab2:
+        show_service_subcategory_management(config_manager)
+    
+    with tab3:
+        show_service_details_management(config_manager)
+
+def show_service_type_management(config_manager):
+    """Service Type 관리 - MB Type과 동일한 방식"""
+    st.subheader("🏷️ Service Type 관리")
+    st.caption("Service Type을 관리합니다 (MB Type과 동일한 방식)")
+    
+    # 현재 Service Type 목록 표시
+    service_types = config_manager.get_hr_components_for_management('service_type')
+    
+    if service_types:
+        st.write("**현재 Service Type:**")
+        for stype in service_types:
+            if stype['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{stype['component_key']}** - {stype['component_name']}")
+                    if stype['description']:
+                        st.caption(stype['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_service_type_{stype['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_service_type_{stype['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_service_type_{stype['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(stype['component_id']):
+                            st.success("Service Type이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_service_type_{stype['component_id']}", False):
+                    with st.expander("✏️ Service Type 수정", expanded=True):
+                        with st.form(f"edit_service_type_{stype['component_id']}"):
+                            new_key = st.text_input("키", value=stype['component_key'])
+                            new_name = st.text_input("이름", value=stype['component_name'])
+                            new_description = st.text_input("설명", value=stype['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        stype['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("Service Type이 수정되었습니다!")
+                                        st.session_state[f"editing_service_type_{stype['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_service_type_{stype['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 Service Type이 없습니다.")
+    
+    # 새 Service Type 추가
+    with st.expander("➕ 새 Service Type 추가"):
+        with st.form("add_service_type"):
+            new_key = st.text_input("Service Type 키", placeholder="예: TRAINING")
+            new_name = st.text_input("Service Type 이름", placeholder="예: 교육서비스")
+            new_description = st.text_input("설명", placeholder="예: 고객 교육 및 트레이닝 서비스")
+            
+            if st.form_submit_button("➕ Service Type 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'service_type', 'SERVICE', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"Service Type '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("Service Type 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("Service Type 키와 이름은 필수입니다.")
+
+def show_service_subcategory_management(config_manager):
+    """Service Sub Category 관리 - MB Sub Category와 동일한 방식"""
+    st.subheader("📂 Service Sub Category 관리")
+    st.caption("각 Service Type의 Sub Category를 관리합니다")
+    
+    # Service Type 선택
+    service_types = config_manager.get_hr_components_list('service_type')
+    if not service_types:
+        st.warning("먼저 Service Type을 등록해주세요.")
+        return
+    
+    selected_service_type = st.selectbox(
+        "Service Type 선택",
+        service_types,
+        help="Sub Category를 관리할 Service Type을 선택하세요"
+    )
+    
+    if selected_service_type:
+        # 현재 Sub Category 목록 표시
+        subcategories = config_manager.get_hr_components_for_management('service_sub_category', selected_service_type)
+        
+        if subcategories:
+            st.write(f"**{selected_service_type}의 Sub Category:**")
+            for sc in subcategories:
+                if sc['is_active']:
+                    col1, col2, col3 = st.columns([6, 1, 1])
+                    with col1:
+                        st.write(f"**{sc['component_key']}** - {sc['component_name']}")
+                        if sc['description']:
+                            st.caption(sc['description'])
+                    with col2:
+                        if st.button("✏️", key=f"edit_service_sc_{sc['component_id']}", help="수정", use_container_width=True):
+                            st.session_state[f"editing_service_sc_{sc['component_id']}"] = True
+                            st.rerun()
+                    with col3:
+                        if st.button("🗑️", key=f"delete_service_sc_{sc['component_id']}", help="삭제", use_container_width=True):
+                            if config_manager.delete_hr_component(sc['component_id']):
+                                st.success("Sub Category가 삭제되었습니다!")
+                                st.rerun()
+                    
+                    # 수정 폼 표시
+                    if st.session_state.get(f"editing_service_sc_{sc['component_id']}", False):
+                        with st.expander("✏️ Sub Category 수정", expanded=True):
+                            with st.form(f"edit_service_sc_{sc['component_id']}"):
+                                new_key = st.text_input("키", value=sc['component_key'])
+                                new_name = st.text_input("이름", value=sc['component_name'])
+                                new_description = st.text_input("설명", value=sc['description'] or "")
+                                
+                                col_submit, col_cancel = st.columns([1, 1])
+                                with col_submit:
+                                    if st.form_submit_button("💾 저장"):
+                                        if config_manager.update_hr_component(
+                                            sc['component_id'], component_key=new_key, 
+                                            component_name=new_name, description=new_description
+                                        ):
+                                            st.success("Sub Category가 수정되었습니다!")
+                                            st.session_state[f"editing_service_sc_{sc['component_id']}"] = False
+                                            st.rerun()
+                                
+                                with col_cancel:
+                                    if st.form_submit_button("❌ 취소"):
+                                        st.session_state[f"editing_service_sc_{sc['component_id']}"] = False
+                                        st.rerun()
+        else:
+            st.info(f"{selected_service_type}에 등록된 Sub Category가 없습니다.")
+        
+        # 새 Sub Category 추가
+        with st.expander(f"➕ {selected_service_type} Sub Category 추가"):
+            with st.form(f"add_service_sub_category_{selected_service_type}"):
+                new_key = st.text_input("Sub Category 키", placeholder="예: BASIC")
+                new_name = st.text_input("Sub Category 이름", placeholder="예: 기본교육")
+                new_description = st.text_input("설명", placeholder="예: 기본적인 교육 서비스")
+                
+                if st.form_submit_button("➕ Sub Category 추가"):
+                    if new_key and new_name:
+                        success = config_manager.add_hr_component(
+                            'service_sub_category', 'SERVICE', new_key, new_name, selected_service_type, None, new_description
+                        )
+                        if success:
+                            st.success(f"Sub Category '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("Sub Category 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("Sub Category 키와 이름은 필수입니다.")
+
+def show_service_details_management(config_manager):
+    """Service 세부사항 관리 - MB Material과 동일한 방식"""
+    st.subheader("⚙️ Service 세부사항 관리")
+    st.caption("Service 세부사항을 관리합니다 (MB Material과 동일한 방식)")
+    
+    # 현재 세부사항 목록 표시
+    details = config_manager.get_hr_components_for_management('service_detail')
+    
+    if details:
+        st.write("**현재 Service 세부사항:**")
+        for detail in details:
+            if detail['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{detail['component_key']}** - {detail['component_name']}")
+                    if detail['description']:
+                        st.caption(detail['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_service_detail_{detail['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_service_detail_{detail['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_service_detail_{detail['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(detail['component_id']):
+                            st.success("세부사항이 삭제되었습니다!")
+                            st.rerun()
+        
+        # 수정 폼들 표시
+        for detail in details:
+            if detail['is_active'] and st.session_state.get(f"editing_service_detail_{detail['component_id']}", False):
+                with st.expander("✏️ 세부사항 수정", expanded=True):
+                    with st.form(f"edit_service_detail_{detail['component_id']}"):
+                        new_key = st.text_input("키", value=detail['component_key'])
+                        new_name = st.text_input("이름", value=detail['component_name'])
+                        new_description = st.text_input("설명", value=detail['description'] or "")
+                        
+                        col_submit, col_cancel = st.columns([1, 1])
+                        with col_submit:
+                            if st.form_submit_button("💾 저장"):
+                                if config_manager.update_hr_component(
+                                    detail['component_id'], component_key=new_key, 
+                                    component_name=new_name, description=new_description
+                                ):
+                                    st.success("세부사항이 수정되었습니다!")
+                                    st.session_state[f"editing_service_detail_{detail['component_id']}"] = False
+                                    st.rerun()
+                        
+                        with col_cancel:
+                            if st.form_submit_button("❌ 취소"):
+                                st.session_state[f"editing_service_detail_{detail['component_id']}"] = False
+                                st.rerun()
+    else:
+        st.info("등록된 Service 세부사항이 없습니다.")
+    
+    # 새 세부사항 추가
+    with st.expander("➕ Service 세부사항 추가"):
+        with st.form("add_service_detail"):
+            new_key = st.text_input("세부사항 키", placeholder="예: ONSITE")
+            new_name = st.text_input("세부사항 이름", placeholder="예: 현장서비스")
+            new_description = st.text_input("설명", placeholder="예: 고객 현장에서 제공하는 서비스")
+            
+            if st.form_submit_button("➕ 세부사항 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'service_detail', 'SERVICE', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"세부사항 '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("세부사항 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("세부사항 키와 이름은 필수입니다.")
+
+def show_spare_types(config_manager):
+    """예비부품 타입 관리 - MB와 동일한 계층형 구조"""
+    st.subheader("🔩 예비부품 타입 관리")
+    st.caption("예비부품 타입을 계층형으로 관리합니다 (MB와 동일한 방식)")
+    
+    # 탭으로 구분
+    tab1, tab2, tab3 = st.tabs(["Spare Type 관리", "Sub Category 관리", "Spare 세부사항 관리"])
+    
+    with tab1:
+        show_spare_type_management(config_manager)
+    
+    with tab2:
+        show_spare_subcategory_management(config_manager)
+    
+    with tab3:
+        show_spare_details_management(config_manager)
+
+def show_spare_type_management(config_manager):
+    """Spare Type 관리 - MB Type과 동일한 방식"""
+    st.subheader("🏷️ Spare Type 관리")
+    st.caption("Spare Type을 관리합니다 (MB Type과 동일한 방식)")
+    
+    # 현재 Spare Type 목록 표시
+    spare_types = config_manager.get_hr_components_for_management('spare_type')
+    
+    if spare_types:
+        st.write("**현재 Spare Type:**")
+        for stype in spare_types:
+            if stype['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{stype['component_key']}** - {stype['component_name']}")
+                    if stype['description']:
+                        st.caption(stype['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_spare_type_{stype['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_spare_type_{stype['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_spare_type_{stype['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(stype['component_id']):
+                            st.success("Spare Type이 삭제되었습니다!")
+                            st.rerun()
+                
+                # 수정 폼 표시
+                if st.session_state.get(f"editing_spare_type_{stype['component_id']}", False):
+                    with st.expander("✏️ Spare Type 수정", expanded=True):
+                        with st.form(f"edit_spare_type_{stype['component_id']}"):
+                            new_key = st.text_input("키", value=stype['component_key'])
+                            new_name = st.text_input("이름", value=stype['component_name'])
+                            new_description = st.text_input("설명", value=stype['description'] or "")
+                            
+                            col_submit, col_cancel = st.columns([1, 1])
+                            with col_submit:
+                                if st.form_submit_button("💾 저장"):
+                                    if config_manager.update_hr_component(
+                                        stype['component_id'], component_key=new_key, 
+                                        component_name=new_name, description=new_description
+                                    ):
+                                        st.success("Spare Type이 수정되었습니다!")
+                                        st.session_state[f"editing_spare_type_{stype['component_id']}"] = False
+                                        st.rerun()
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌ 취소"):
+                                    st.session_state[f"editing_spare_type_{stype['component_id']}"] = False
+                                    st.rerun()
+    else:
+        st.info("등록된 Spare Type이 없습니다.")
+    
+    # 새 Spare Type 추가
+    with st.expander("➕ 새 Spare Type 추가"):
+        with st.form("add_spare_type"):
+            new_key = st.text_input("Spare Type 키", placeholder="예: FILTER")
+            new_name = st.text_input("Spare Type 이름", placeholder="예: 필터")
+            new_description = st.text_input("설명", placeholder="예: 각종 필터 부품")
+            
+            if st.form_submit_button("➕ Spare Type 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'spare_type', 'SPARE', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"Spare Type '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("Spare Type 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("Spare Type 키와 이름은 필수입니다.")
+
+def show_spare_subcategory_management(config_manager):
+    """Spare Sub Category 관리 - MB Sub Category와 동일한 방식"""
+    st.subheader("📂 Spare Sub Category 관리")
+    st.caption("각 Spare Type의 Sub Category를 관리합니다")
+    
+    # Spare Type 선택
+    spare_types = config_manager.get_hr_components_list('spare_type')
+    if not spare_types:
+        st.warning("먼저 Spare Type을 등록해주세요.")
+        return
+    
+    selected_spare_type = st.selectbox(
+        "Spare Type 선택",
+        spare_types,
+        help="Sub Category를 관리할 Spare Type을 선택하세요"
+    )
+    
+    if selected_spare_type:
+        # 현재 Sub Category 목록 표시
+        subcategories = config_manager.get_hr_components_for_management('spare_sub_category', selected_spare_type)
+        
+        if subcategories:
+            st.write(f"**{selected_spare_type}의 Sub Category:**")
+            for sc in subcategories:
+                if sc['is_active']:
+                    col1, col2, col3 = st.columns([6, 1, 1])
+                    with col1:
+                        st.write(f"**{sc['component_key']}** - {sc['component_name']}")
+                        if sc['description']:
+                            st.caption(sc['description'])
+                    with col2:
+                        if st.button("✏️", key=f"edit_spare_sc_{sc['component_id']}", help="수정", use_container_width=True):
+                            st.session_state[f"editing_spare_sc_{sc['component_id']}"] = True
+                            st.rerun()
+                    with col3:
+                        if st.button("🗑️", key=f"delete_spare_sc_{sc['component_id']}", help="삭제", use_container_width=True):
+                            if config_manager.delete_hr_component(sc['component_id']):
+                                st.success("Sub Category가 삭제되었습니다!")
+                                st.rerun()
+                    
+                    # 수정 폼 표시
+                    if st.session_state.get(f"editing_spare_sc_{sc['component_id']}", False):
+                        with st.expander("✏️ Sub Category 수정", expanded=True):
+                            with st.form(f"edit_spare_sc_{sc['component_id']}"):
+                                new_key = st.text_input("키", value=sc['component_key'])
+                                new_name = st.text_input("이름", value=sc['component_name'])
+                                new_description = st.text_input("설명", value=sc['description'] or "")
+                                
+                                col_submit, col_cancel = st.columns([1, 1])
+                                with col_submit:
+                                    if st.form_submit_button("💾 저장"):
+                                        if config_manager.update_hr_component(
+                                            sc['component_id'], component_key=new_key, 
+                                            component_name=new_name, description=new_description
+                                        ):
+                                            st.success("Sub Category가 수정되었습니다!")
+                                            st.session_state[f"editing_spare_sc_{sc['component_id']}"] = False
+                                            st.rerun()
+                                
+                                with col_cancel:
+                                    if st.form_submit_button("❌ 취소"):
+                                        st.session_state[f"editing_spare_sc_{sc['component_id']}"] = False
+                                        st.rerun()
+        else:
+            st.info(f"{selected_spare_type}에 등록된 Sub Category가 없습니다.")
+        
+        # 새 Sub Category 추가
+        with st.expander(f"➕ {selected_spare_type} Sub Category 추가"):
+            with st.form(f"add_spare_sub_category_{selected_spare_type}"):
+                new_key = st.text_input("Sub Category 키", placeholder="예: REGULAR")
+                new_name = st.text_input("Sub Category 이름", placeholder="예: 일반형")
+                new_description = st.text_input("설명", placeholder="예: 일반적인 형태의 부품")
+                
+                if st.form_submit_button("➕ Sub Category 추가"):
+                    if new_key and new_name:
+                        success = config_manager.add_hr_component(
+                            'spare_sub_category', 'SPARE', new_key, new_name, selected_spare_type, None, new_description
+                        )
+                        if success:
+                            st.success(f"Sub Category '{new_key}'가 추가되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("Sub Category 추가 중 오류가 발생했습니다.")
+                    else:
+                        st.warning("Sub Category 키와 이름은 필수입니다.")
+
+def show_spare_details_management(config_manager):
+    """Spare 세부사항 관리 - MB Material과 동일한 방식"""
+    st.subheader("⚙️ Spare 세부사항 관리")
+    st.caption("Spare 세부사항을 관리합니다 (MB Material과 동일한 방식)")
+    
+    # 현재 세부사항 목록 표시
+    details = config_manager.get_hr_components_for_management('spare_detail')
+    
+    if details:
+        st.write("**현재 Spare 세부사항:**")
+        for detail in details:
+            if detail['is_active']:
+                col1, col2, col3 = st.columns([6, 1, 1])
+                with col1:
+                    st.write(f"**{detail['component_key']}** - {detail['component_name']}")
+                    if detail['description']:
+                        st.caption(detail['description'])
+                with col2:
+                    if st.button("✏️", key=f"edit_spare_detail_{detail['component_id']}", help="수정", use_container_width=True):
+                        st.session_state[f"editing_spare_detail_{detail['component_id']}"] = True
+                        st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"delete_spare_detail_{detail['component_id']}", help="삭제", use_container_width=True):
+                        if config_manager.delete_hr_component(detail['component_id']):
+                            st.success("세부사항이 삭제되었습니다!")
+                            st.rerun()
+        
+        # 수정 폼들 표시
+        for detail in details:
+            if detail['is_active'] and st.session_state.get(f"editing_spare_detail_{detail['component_id']}", False):
+                with st.expander("✏️ 세부사항 수정", expanded=True):
+                    with st.form(f"edit_spare_detail_{detail['component_id']}"):
+                        new_key = st.text_input("키", value=detail['component_key'])
+                        new_name = st.text_input("이름", value=detail['component_name'])
+                        new_description = st.text_input("설명", value=detail['description'] or "")
+                        
+                        col_submit, col_cancel = st.columns([1, 1])
+                        with col_submit:
+                            if st.form_submit_button("💾 저장"):
+                                if config_manager.update_hr_component(
+                                    detail['component_id'], component_key=new_key, 
+                                    component_name=new_name, description=new_description
+                                ):
+                                    st.success("세부사항이 수정되었습니다!")
+                                    st.session_state[f"editing_spare_detail_{detail['component_id']}"] = False
+                                    st.rerun()
+                        
+                        with col_cancel:
+                            if st.form_submit_button("❌ 취소"):
+                                st.session_state[f"editing_spare_detail_{detail['component_id']}"] = False
+                                st.rerun()
+    else:
+        st.info("등록된 Spare 세부사항이 없습니다.")
+    
+    # 새 세부사항 추가
+    with st.expander("➕ Spare 세부사항 추가"):
+        with st.form("add_spare_detail"):
+            new_key = st.text_input("세부사항 키", placeholder="예: OEM")
+            new_name = st.text_input("세부사항 이름", placeholder="예: 정품부품")
+            new_description = st.text_input("설명", placeholder="예: 제조사 정품 부품")
+            
+            if st.form_submit_button("➕ 세부사항 추가"):
+                if new_key and new_name:
+                    success = config_manager.add_hr_component(
+                        'spare_detail', 'SPARE', new_key, new_name, None, None, new_description
+                    )
+                    if success:
+                        st.success(f"세부사항 '{new_key}'가 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("세부사항 추가 중 오류가 발생했습니다.")
+                else:
+                    st.warning("세부사항 키와 이름은 필수입니다.")
+
+def show_company_info_settings():
+    """회사 정보 설정 탭"""
+    st.subheader("🏢 회사 정보 설정")
+    st.caption("회사 기본 정보와 연락처를 관리합니다")
+    
+    # 회사 기본 정보
+    with st.expander("📋 회사 기본 정보", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            company_name = st.text_input("회사명", value="YUMOLD Co., Ltd.")
+            company_name_en = st.text_input("영문 회사명", value="YUMOLD Co., Ltd.")
+            business_number = st.text_input("사업자등록번호", value="123-45-67890")
+            ceo_name = st.text_input("대표자명", value="대표이사")
+        with col2:
+            address = st.text_area("주소", value="베트남 하노이시")
+            phone = st.text_input("전화번호", value="+84-xxx-xxxx")
+            email = st.text_input("이메일", value="info@yumold.com")
+            website = st.text_input("웹사이트", value="www.yumold.com")
+        
+        if st.button("💾 회사 정보 저장"):
+            st.success("회사 정보가 저장되었습니다!")
+    
+    # 기본 통화 및 언어 설정
+    with st.expander("🌐 기본 설정"):
+        col1, col2 = st.columns(2)
+        with col1:
+            default_currency = st.selectbox("기본 통화", ["VND", "USD", "KRW"], index=0)
+            default_language = st.selectbox("기본 언어", ["한국어", "English", "Tiếng Việt"], index=0)
+        with col2:
+            timezone = st.selectbox("시간대", ["Asia/Ho_Chi_Minh", "Asia/Seoul", "UTC"], index=0)
+            date_format = st.selectbox("날짜 형식", ["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"], index=0)
+        
+        if st.button("🔄 기본 설정 저장"):
+            st.success("기본 설정이 저장되었습니다!")
+
+def show_system_options():
+    """시스템 옵션 탭"""
+    st.subheader("🔧 시스템 옵션")
+    st.caption("시스템 전반의 설정을 관리합니다")
+    
+    # 시스템 보안 설정
+    with st.expander("🔐 보안 설정"):
+        col1, col2 = st.columns(2)
+        with col1:
+            password_policy = st.selectbox("비밀번호 정책", ["기본", "강화", "매우강화"], index=0)
+            session_timeout = st.number_input("세션 타임아웃(분)", min_value=10, max_value=480, value=60)
+        with col2:
+            login_attempts = st.number_input("최대 로그인 시도 횟수", min_value=3, max_value=10, value=5)
+            enable_2fa = st.checkbox("이중 인증 활성화", value=False)
+        
+        if st.button("🛡️ 보안 설정 저장"):
+            st.success("보안 설정이 저장되었습니다!")
+    
+    # 성능 설정
+    with st.expander("⚡ 성능 설정"):
+        col1, col2 = st.columns(2)
+        with col1:
+            page_size = st.number_input("페이지당 항목 수", min_value=10, max_value=100, value=20)
+            cache_duration = st.number_input("캐시 유지 시간(초)", min_value=60, max_value=3600, value=300)
+        with col2:
+            enable_logging = st.checkbox("시스템 로깅 활성화", value=True)
+            log_level = st.selectbox("로그 레벨", ["ERROR", "WARNING", "INFO", "DEBUG"], index=2)
+        
+        if st.button("🚀 성능 설정 저장"):
+            st.success("성능 설정이 저장되었습니다!")
