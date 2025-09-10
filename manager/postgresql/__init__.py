@@ -1,1 +1,0 @@
-# PostgreSQL 매니저 모듈
