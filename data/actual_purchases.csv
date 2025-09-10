@@ -1,0 +1,1 @@
+﻿purchase_id,product_id,supplier_id,agreement_id,purchase_order_id,quantity,actual_price_usd,actual_price_local,exchange_rate_at_purchase,purchase_date,delivery_date,agreement_variance_percent,total_amount_usd,total_amount_local,payment_terms_actual,quality_rating,delivery_rating,notes,created_by,created_date

@@ -1,0 +1,5 @@
+account_id,account_name,account_number,bank_name,bank_code,account_type,currency,notes,status,created_date
+ACC_20250811_133504,투자 계좌 -VND,700-038-038271,Shinhan Bank Vietnam,"SWIFT Code : SHBKVNXXXX , CITAD Code :01616002(HN)",business,VND,투자 계좌 계좌 오픈인 : 31-07-2025,active,2025-08-11 13:35:04
+ACC_20250811_133537,투자 계좌 -USD,700-038-038338,Shinhan Bank Vietnam,"SWIFT Code : SHBKVNXXXX , CITAD Code :01616002(HN)",business,USD,투자 계좌 계좌 오픈인 : 31-07-2025,active,2025-08-11 13:35:37
+ACC_20250811_133607,운영 계좌 -VND,700-038-038199,Shinhan Bank Vietnam,"SWIFT Code : SHBKVNXXXX , CITAD Code :01616002(HN)",business,VND,운영계좌 계좌 오픈인 : 31-07-2025,active,2025-08-11 13:36:07
+ACC_20250811_133624,운영 계좌 -USD,700-038-038200,Shinhan Bank Vietnam,"SWIFT Code : SHBKVNXXXX , CITAD Code :01616002(HN)",business,USD,운영계좌 계좌 오픈인 : 31-07-2025,active,2025-08-11 13:36:24

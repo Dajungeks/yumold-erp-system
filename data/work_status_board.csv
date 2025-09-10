@@ -1,0 +1,6 @@
+﻿status_id,workflow_id,title,description,status,priority,assigned_to,created_by,created_date,updated_date,due_date,progress,category,tags,comments
+WS20250827061004,,사무용품 구입,"사무요품 구입.
+1. 쓰레기통 : 1
+2.  슬리퍼 2 
+3. 실발장 1
+4. ",진행중,보통,LƯU THỊ HẰNG (2508002),2508002,2025-08-27 06:10:04,2025-09-06 17:16:45,2025-09-06,0,기타,,"[{""author"": ""2508002"", ""comment"": ""đã xác nhận"", ""timestamp"": ""2025-08-27 06:14:47""}]"

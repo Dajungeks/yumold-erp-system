@@ -1,0 +1,9 @@
+﻿approval_id,request_type,request_id,requester_id,requester_name,approver_id,approver_name,request_date,approval_date,status,priority,description,reason,rejection_reason,supporting_documents,input_date,updated_date
+APR20250703174620,vacation_approval,VAC20250703174620,master,직원 master,master,master,2025-07-03 17:46:20,2025-07-03 17:46:39,approved,normal,휴가 신청 (2025-07-03 ~ 2025-07-07),승인됨,,,2025-07-03 17:46:20,2025-07-03 17:46:39
+APR20250703181349,vacation_approval,VAC20250703181349,master,직원 master,master,master,2025-07-03 18:13:49,2025-07-03 18:13:58,approved,normal,휴가 신청 (2025-07-08 ~ 2025-07-10),승인됨,,,2025-07-03 18:13:49,2025-07-03 18:13:58
+APR20250703184225,vacation_approval,VAC20250703184225,master,직원 master,master,master,2025-07-03 18:42:25,2025-07-03 18:43:06,approved,normal,휴가 신청 (2025-07-24 ~ 2025-07-24),승인됨,,,2025-07-03 18:42:25,2025-07-03 18:43:07
+APR20250813151704,개인정보 수정 - 이메일 변경,,2507001,이강민,2501001,김충성,2025-08-13 15:17:04,2025-08-17 17:03:48,approved,normal,"수정 항목: 이메일 변경
+현재 값:  lkm@yumold.com
+변경 값: test lkm@yumold.com
+변경 사유: sss",,,,2025-08-13 15:17:04,2025-08-17 17:03:48
+APR20250819000547,휴가 승인,VAC20250819000547,2501001,김충성,,,2025-08-19 00:05:47,,대기,보통,휴가 신청 (2025-08-21 ~ 2025-08-23),,,,2025-08-19 00:05:47,2025-08-19 00:05:47

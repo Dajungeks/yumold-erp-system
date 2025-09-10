@@ -1,0 +1,5 @@
+﻿price_history_id,agreement_id,product_id,supplier_id,old_price_usd,new_price_usd,old_price_local,new_price_local,exchange_rate_at_change,change_reason,change_date,effective_date,created_by,notes
+PH001,AGR001,MB-2P-001,22222,15.50,16.20,350.0,365.0,22.5,환율 변동 및 원자재비 상승,2025-01-15,2025-02-01,master,MB 제품 정기 가격 조정
+PH002,AGR002,HR-VLV-001,11111,125.00,130.00,3050000,3180000,24500,베트남 인건비 상승,2025-01-20,2025-02-15,master,HR 밸브 제품 가격 인상
+PH003,AGR003,MB-3P-002,22222,28.75,29.50,650.0,665.0,22.5,중국 제조비 인상,2025-02-01,2025-02-20,master,3P 제품 계절적 조정
+PH004,AGR004,HRC-HRCT-001,11111,85.00,87.50,2075000,2137500,24500,기술 업그레이드 비용,2025-02-10,2025-03-01,master,컨트롤러 가격 조정

@@ -1,0 +1,1 @@
+﻿order_id,order_number,quotation_id,quotation_number,customer_name,customer_id,total_amount,currency,order_date,requested_delivery_date,status,created_by,products,notes,created_date,updated_date,confirmed_delivery_date,order_status,payment_status,payment_terms,special_instructions,last_updated

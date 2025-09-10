@@ -1,0 +1,5 @@
+﻿admin_id,admin_password,branch_code,branch_name,admin_name,admin_email,permissions,created_date,last_login,is_active
+YMC_ADMIN,admin123,YMC,YMC지사,YMC 관리자,ymc@company.com,"{""can_create_report"": true, ""can_edit_report"": true, ""can_delete_report"": true, ""can_approve_report"": true, ""can_manage_users"": true, ""branch_access"": [""YMC""]}",2025-08-13 14:26:36,,True
+YMK_ADMIN,admin123,YMK,YMK지사,YMK 관리자,ymk@company.com,"{""can_create_report"": true, ""can_edit_report"": true, ""can_delete_report"": true, ""can_approve_report"": true, ""can_manage_users"": true, ""branch_access"": [""YMK""]}",2025-08-13 14:26:36,,True
+YMTH_ADMIN,admin123,YMTH,YMTH지사,YMTH 관리자,ymth@company.com,"{""can_create_report"": true, ""can_edit_report"": true, ""can_delete_report"": true, ""can_approve_report"": true, ""can_manage_users"": true, ""branch_access"": [""YMTH""]}",2025-08-13 14:26:36,,True
+HQ_ADMIN,admin123,HQ,본사,본사 관리자,hq@company.com,"{""can_create_report"": true, ""can_edit_report"": true, ""can_delete_report"": true, ""can_approve_report"": true, ""can_manage_users"": true, ""branch_access"": [""HQ""]}",2025-08-13 14:26:36,,True

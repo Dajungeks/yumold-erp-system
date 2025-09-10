@@ -1,0 +1,7 @@
+﻿category_id,category_name,description,default_interval_days,notification_days
+VISA,비자 관리,"외국인 직원 비자 신청, 갱신, 연장 등",365,"[30, 14, 7, 1]"
+VEHICLE,자동차 관리,"자동차 검사, 보험 갱신, 등록 등",365,"[60, 30, 14, 7]"
+LICENSE,인허가 관리,"사업자등록, 각종 면허 갱신",365,"[90, 30, 14, 7]"
+INSURANCE,보험 관리,각종 보험 가입 및 갱신,365,"[60, 30, 14, 7]"
+CONTRACT,계약 관리,"임대료, 유지보수 계약 등",365,"[30, 14, 7]"
+MAINTENANCE,정기 점검,"시설, 장비 정기 점검 및 유지보수",90,"[14, 7, 3, 1]"

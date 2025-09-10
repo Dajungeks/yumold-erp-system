@@ -1,0 +1,2 @@
+﻿status_id,employee_id,employee_name,status_type,start_date,end_date,reason,current_status,request_date,approved_by,approved_date,input_date,updated_date
+STS20250701212743,2507001,,vacation,2025-07-01,2025-07-01,,active,2025-07-01,,,2025-07-01 21:27:43,2025-07-01 21:27:43

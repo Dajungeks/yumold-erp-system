@@ -1,0 +1,18 @@
+{
+  "company_name": "YUMOLD VIETNAM CO., LTD",
+  "company_subtitle": "Hot Runner Systems & Mold Components Specialist",
+  "company_address": "12th Floor Keangnam Hanoi Landmark 72, Area E6, Me Tri Ward, Nam Tu Liem District, Hanoi City, Vietnam",
+  "company_phone": "Tel: +84 35 342 9082",
+  "company_email": "dave-vn@yumold.com",
+  "quotation_title": "QUOTATION",
+  "header_color": "#000000",
+  "title_color": "#000000",
+  "table_header_color": "#000000",
+  "border_color": "#000000",
+  "font_size_company": 12,
+  "font_size_title": 32,
+  "font_size_table": 14,
+  "show_company_subtitle": true,
+  "show_border": true,
+  "footer_text": "Terms & Conditions: Payment due within 30 days. Prices are valid for 30 days from quotation date."
+}

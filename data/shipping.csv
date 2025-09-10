@@ -1,0 +1,1 @@
+﻿shipping_id,shipping_number,quotation_id,customer_id,customer_name,shipping_address,shipping_method,tracking_number,estimated_delivery,actual_delivery,shipping_cost,currency,products_json,status,created_by,shipped_date,delivered_date,notes,input_date,updated_date

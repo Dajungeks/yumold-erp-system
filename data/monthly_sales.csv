@@ -1,0 +1,1 @@
+sales_id,year_month,customer_id,customer_name,product_code,product_name,category,quantity,unit_price,total_amount,currency,amount_vnd,amount_usd,sales_date,quotation_id,order_id,payment_status,sales_rep,profit_margin,cost_amount,created_date,updated_date

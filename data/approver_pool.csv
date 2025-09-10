@@ -1,0 +1,7 @@
+﻿employee_id,employee_name,department,position,approval_level,max_approval_amount,is_active
+MGR001,김팀장,영업부,팀장,1,1000000,True
+MGR002,이부장,영업부,부장,2,5000000,True
+MGR003,박팀장,기술부,팀장,1,1000000,True
+MGR004,최부장,기술부,부장,2,5000000,True
+FIN001,재무담당자,재무부,차장,3,10000000,True
+CEO001,대표이사,경영진,대표,4,50000000,True

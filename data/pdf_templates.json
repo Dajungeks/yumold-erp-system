@@ -1,0 +1,21 @@
+{
+  "quotation": {
+    "default": {
+      "name": "기본 템플릿",
+      "header": {
+        "company_name": "YUMOLD VIETNAM CO., LTD",
+        "address": "Industrial Zone, Binh Duong Province, Vietnam",
+        "phone": "Tel: +84 (0) 274 XXX XXXX",
+        "email": "Email: sales@yumoldvietnam.com"
+      },
+      "title": {
+        "text": "QUOTATION",
+        "style": {
+          "size": 20,
+          "color": "#667eea",
+          "align": "center"
+        }
+      }
+    }
+  }
+}

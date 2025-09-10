@@ -1,0 +1,1 @@
+﻿transaction_id,product_id,product_code,quotation_id,customer_id,customer_name,quantity,unit_price_usd,unit_price_local,local_currency,total_amount_usd,total_amount_local,standard_price_usd,price_variance_percent,discount_amount,discount_reason,sale_date,created_date

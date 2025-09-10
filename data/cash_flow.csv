@@ -1,0 +1,2 @@
+transaction_id,reference_id,reference_type,transaction_type,amount,currency,transaction_date,description,status,account,created_by,created_date
+cf9331fa-6fab-4114-b043-29dac43dce99,,other,income,3000000000.0,VND,2025-08-05,투자 계좌에서 30 억동 입금됨,completed,운영 계좌 -VND (Shinhan Bank Vietnam),system,2025-08-11 16:00:42

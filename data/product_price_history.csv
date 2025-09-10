@@ -1,0 +1,2 @@
+﻿price_id,product_id,product_code,product_name,standard_price_usd,standard_price_local,local_currency,change_reason,effective_date,end_date,created_by,created_date,is_current,updated_date
+PH005,MANUAL_20250731092535,SP-TIP-Valve-ST-MAE-20,,816.33,20000000.0,VND,테스트 가격,2025-07-31,,system,2025-07-31 12:25:03,True,

@@ -1,0 +1,3 @@
+﻿product_id,product_code,product_name,product_name_english,product_name_vietnamese,main_category,sub_category_mb,sub_category_hrc,sub_category_hr,sub_category_mb_material,supplier_id,supplier_name,cost_price_usd,cost_price_local,local_currency,recommended_price_usd,margin_percent,hs_code,import_tax_percent,vat_percent,description,specifications,unit,minimum_order_qty,lead_time_days,status,input_date,updated_date
+PROD001,YMV-ST-001,,,,,,,,,SUP001,대한제강,,,,,,,,,,,,,,활성,,
+PROD002,YMV-HR-002,,,,,,,,,SUP002,포스코,,,,,,,,,,,,,,활성,,

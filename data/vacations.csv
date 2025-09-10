@@ -1,0 +1,6 @@
+﻿vacation_id,employee_id,employee_name,vacation_type,start_date,end_date,days_count,reason,status,request_date,approved_by,approved_date,rejection_reason,input_date,updated_date
+VAC20250701212827,2507001,,annual_leave,2025-07-01,2025-07-01,1,,pending,2025-07-01,,,,2025-07-01 21:28:27,2025-07-01 21:28:27
+VAC20250703174620,master,직원 master,annual_leave,2025-07-03,2025-07-07,5,개인 사용,approved,2025-07-03,system,2025-07-03,,2025-07-03 17:46:20,2025-07-03 17:46:20
+VAC20250703181349,master,직원 master,family_event,2025-07-08,2025-07-10,3,개인 사유,pending,2025-07-03,,,,2025-07-03 18:13:49,2025-07-03 18:13:49
+VAC20250703184225,master,직원 master,annual,2025-07-24,2025-07-24,1,아아,pending,2025-07-03,,,,2025-07-03 18:42:25,2025-07-03 18:42:25
+VAC20250819000547,2501001,김충성,family_event,2025-08-21,2025-08-23,3,ddd,pending,2025-08-19,,,,2025-08-19 00:05:47,2025-08-19 00:05:47

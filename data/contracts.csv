@@ -1,0 +1,11 @@
+﻿contract_id,contract_name,contract_type,counterpart_type,counterpart_id,counterpart_name,start_date,end_date,contract_amount,currency,payment_terms,status,responsible_person,file_attachments,notes,created_date,updated_date
+CON001,Account Service Cintract ( Monthy),서비스계약,공급업체,,CS VINA ACCOUNTING SERVICE AND TAX ADVISORY LIMITED,2025-08-01 00:00:00,2026-08-01 00:00:00,6225600.0,VND,"25일 3개월 마다 선납
+SHIN HAN 700-015-143852 Vu Hong Anh",진행중,KIM CHUNGSUNG,,0.0,2025-08-13 10:15:14,2025-08-13 10:27:54
+CON002,Account Service ( Year ),기타,고객,, CS VINA ACCOUNTING SERVICE AND TAX ADVISORY LIMITED,2025-08-01 00:00:00,2026-08-01 00:00:00,6225600.0,VND,"추가 확인 필요
+SHIN HAN 700-015-143852 Vu Hong Anh",진행중,KIM CHUNGSUNG,,0.0,2025-08-13 10:23:28,2025-08-13 10:27:43
+CON003,"Work Permit,TRC  Contract",서비스계약,공급업체,,SOAVE SO LIMITED COMPANY,2025-01-01 00:00:00,2025-12-31 00:00:00,50427360.0,VND,"Service fee for applying for work permit ( 4Pserson)Temporary Residence Card
+SHIN HAN 700-022-931937",진행중,KIM CHUNG SUNG,,진행중,2025-08-13 10:31:51,2025-08-13 10:32:53
+CON004,Office Rent Contract ( HANOI ),서비스계약,공급업체,,COF VIETNAM LIMITES COMPANY,,,2000000.0,VND,일시불,진행중,KIM SHUNGSUNG,,하노이 가상 오피스,2025-08-13 10:41:43,2025-08-13 10:41:43
+CON005,company incorporation CONTRACT,서비스계약,공급업체,,SOAVE SO LIMITED COMPANY,,,84045600.0,VND,"설립 완료 까지 
+일시불 지불",완료,KIM CHUNGSUNG,,[2025-08-13] 상태변경: 진행중 → 완료 (설립 완료),2025-08-13 10:44:06,2025-08-13 10:45:14
+CON006,Office Rent Contract ( HANOI ),서비스계약,파트너,,Ong PHAM DUINH THINH,2025-08-14,2026-08-15,8000000.0,VND,"6개월 선납,  보증금 1달ㅠㅑㅇㅍ 19910000718392",진행중,Ong PHAM DUINH THINH,,,2025-08-17 15:17:22,2025-08-17 15:17:22
