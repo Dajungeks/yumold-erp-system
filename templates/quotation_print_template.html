@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{quotation_number}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        *::before, *::after {
+            display: none !important;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px 140px;
+        }
+
+        .quotation-container {
+            background: white;
+            max-width: 210mm;
+            margin: 0 auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .quotation-content {
+            padding: 15px;
+            min-height: calc(280mm - 30px); /* A4 높이 조정 */
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            letter-spacing: 3px;
+        }
+
+        .company-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+
+        .company-left, .company-right {
+            width: 48%;
+        }
+
+        .company-right::before {
+            display: none;
+        }
+
+        .company-left h3, .company-right h3 {
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+
+        .company-right {
+            position: relative;
+        }
+
+        .company-right::before {
+            display: none;
+        }
+
+        .company-address {
+            font-size: 10px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .quote-info {
+            margin-bottom: 15px;
+            text-align: right;
+        }
+
+        .quote-item {
+            margin-bottom: 5px;
+            font-size: 10px;
+        }
+
+        .quote-label {
+            font-weight: bold;
+            display: inline-block;
+            min-width: 80px;
+        }
+
+        .customer-info {
+            margin-bottom: 15px;
+        }
+
+        .customer-item {
+            margin-bottom: 5px;
+            font-size: 10px;
+        }
+
+        .customer-label {
+            font-weight: bold;
+            display: inline-block;
+            min-width: 100px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            border: 2px solid #333;
+            border-left: 2px solid white;
+            border-right: 2px solid white;
+        }
+
+        .items-table th:first-child,
+        .items-table td:first-child {
+            border-left: 1px solid white;
+        }
+
+        .items-table th:last-child,
+        .items-table td:last-child {
+            border-right: 1px solid white;
+        }
+
+        .items-table th,
+        .items-table td {
+            border: 1px solid #333;
+            padding: 6px 4px;
+            text-align: center;
+            font-size: 9px;
+        }
+
+        .items-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .items-table .item-desc {
+            text-align: left;
+            font-size: 9px;
+            color: #666;
+            padding-top: 2px;
+        }
+
+        .totals-section {
+            float: right;
+            width: 200px;
+            border: 1px solid white;
+            margin-bottom: 150px; /* 하단 고정 요소들 위의 여백 조정 */
+            background-color: white;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 10px;
+            border-bottom: 1px solid white;
+            font-size: 9px;
+            background-color: white;
+        }
+
+        .total-row:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            background-color: white;
+        }
+
+        .project-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+            border-left: 1px solid white;
+            border-right: 1px solid white;
+            position: absolute;
+            bottom: 95px; /* 서명란 위에 고정 - 높이 조정 */
+        }
+
+        .project-table th,
+        .project-table td {
+            border: 1px solid #333;
+            padding: 5px;
+            font-size: 8px;
+            text-align: left;
+            line-height: 1.05;
+        }
+
+        .project-table th:first-child,
+        .project-table td:first-child {
+            border-left: 1px solid white;
+        }
+
+        .project-table th:last-child,
+        .project-table td:last-child {
+            border-right: 1px solid white;
+        }
+
+        .project-table .label-col {
+            background-color: white;
+            font-weight: bold;
+            width: 20%;
+        }
+
+        .project-table .value-col {
+            background-color: white;
+            width: 30%;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 10px;
+            padding-top: 5px;
+            border-top: 1px solid #ddd;
+            position: absolute;
+            bottom: 10px; /* 페이지 하단에서 약간 위 */
+            width: calc(100% - 30px); /* 패딩 고려 */
+        }
+
+        .signature-section {
+            text-align: center;
+        }
+
+        .signature-line {
+            width: 200px;
+            border-bottom: 2px solid #333;
+            margin: 10px 0 5px 0;
+            height: 40px;
+            position: relative;
+        }
+
+        .signature-text {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .page-info {
+            font-size: 9px;
+            color: #666;
+            text-align: right;
+        }
+
+        .form-number {
+            font-size: 9px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+            .quotation-container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="quotation-container">
+        <div class="quotation-content">
+
+            <div class="company-info">
+                <div class="company-left">
+                    <h3>{{customer_company}}</h3>
+                    <div class="company-address">
+                        <br><br>
+                        Address: {{customer_address}}<br><br>
+                        Contract Person: {{customer_contact_person}}<br>
+                        Phone No.: {{customer_phone}}<br>
+                        E-mail: {{customer_email}}
+                    </div>
+                </div>
+                <div class="company-right">
+                    <h3>YUMOLD VIETNAM CO., LTD</h3>
+                    <div class="company-address">
+                        <strong>Tax Code (MST):</strong> 0111148237<br><br>
+                        <strong>Hanoi Accounting Office:</strong><br>
+                        Room 1201-2, 12th Floor, Keangnam Hanoi Landmark 72,<br>
+                        E6 Area, Yen Hoa Ward, Hanoi City<br><br>
+                        <strong>Bac Ninh Sales Office:</strong><br>
+                        6th Floor, No. 255 Le Thanh Tong Street,<br>
+                        Vo Cuong Ward, Bac Ninh Province
+                    </div>
+                </div>
+            </div>
+
+            <div class="quote-info">
+                <div class="quote-item">
+                    <span class="quote-label">Date:</span> {{quote_date}} &nbsp;&nbsp;&nbsp;&nbsp; 
+                    <span class="quote-label">Quote No.:</span> {{quotation_number}} &nbsp;&nbsp;&nbsp;&nbsp; 
+                    <span class="quote-label">Rev. No.:</span> {{revision_number}} &nbsp;&nbsp;&nbsp;&nbsp; 
+                    <strong>Currency: {{currency}}</strong>
+                </div>
+            </div>
+
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 8%;">NO</th>
+                        <th style="width: 15%;">Item Code</th>
+                        <th style="width: 25%;">Item Name</th>
+                        <th style="width: 8%;">Qty.</th>
+                        <th style="width: 12%;">Std. Price</th>
+                        <th style="width: 10%;">DC. Rate</th>
+                        <th style="width: 12%;">Unit Price</th>
+                        <th style="width: 10%;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {quotation_items}
+                </tbody>
+            </table>
+
+            <div class="totals-section">
+                <div class="total-row">
+                    <span>TOTAL {{currency}} Excl. VAT</span>
+                    <span>{{subtotal_excl_vat}}</span>
+                </div>
+                <div class="total-row">
+                    <span>TOTAL {{currency}} {{vat_percentage}}% VAT</span>
+                    <span>{{vat_amount}}</span>
+                </div>
+                <div class="total-row">
+                    <span>TOTAL {{currency}} Incl. VAT</span>
+                    <span>{{total_incl_vat}}</span>
+                </div>
+            </div>
+
+            <table class="project-table">
+                <tr>
+                    <td class="label-col">Project Name:</td>
+                    <td class="value-col">{{project_name}}</td>
+                    <td class="label-col">Part Name:</td>
+                    <td class="value-col">{{part_name}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Mold No.:</td>
+                    <td class="value-col">{{mold_number}}</td>
+                    <td class="label-col">Part Weight:</td>
+                    <td class="value-col">{{part_weight}} g</td>
+                </tr>
+                <tr>
+                    <td class="label-col">HRS Info:</td>
+                    <td class="value-col">{{hrs_info}}</td>
+                    <td class="label-col">Resin Type:</td>
+                    <td class="value-col">{{resin_type}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Remark:</td>
+                    <td class="value-col">{{remark}}</td>
+                    <td class="label-col">Valid Date:</td>
+                    <td class="value-col">{{valid_date}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Resin/Additive:</td>
+                    <td class="value-col">{{resin_additive}}</td>
+                    <td class="label-col">Sales Rep:</td>
+                    <td class="value-col">{{sales_representative}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Sol/Material:</td>
+                    <td class="value-col">{{sol_material}}</td>
+                    <td class="label-col">Contact:</td>
+                    <td class="value-col">{{sales_rep_contact}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Payment Terms:</td>
+                    <td class="value-col">{{payment_terms}}</td>
+                    <td class="label-col">Phone:</td>
+                    <td class="value-col">{{sales_rep_phone}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Product Name:</td>
+                    <td class="value-col">{{product_name_detail}}</td>
+                    <td class="label-col">Account:</td>
+                    <td class="value-col">{{account}}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Delivery Date:</td>
+                    <td class="value-col">{{delivery_date}}</td>
+                    <td class="label-col"></td>
+                    <td class="value-col"></td>
+                </tr>
+            </table>
+
+            <div class="footer">
+                <div class="signature-section">
+                    <div class="signature-text">YUMOLD VIETNAM CO., LTD</div>
+                    <div class="signature-line"></div>
+                    <div class="signature-text">Authorised Signature</div>
+                </div>
+                <div class="signature-section">
+                    <div class="signature-text">{{customer_company}}</div>
+                    <div class="signature-line"></div>
+                    <div class="signature-text">Customer Signature</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 프린트 버튼 추가 (화면에서만 표시)
+        if (!window.matchMedia('print').matches) {
+            const printBtn = document.createElement('div');
+            printBtn.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 1000;';
+            printBtn.innerHTML = '<button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">🖨️ Print</button>';
+            document.body.appendChild(printBtn);
+        }
+    </script>
+
+</body>
+</html>

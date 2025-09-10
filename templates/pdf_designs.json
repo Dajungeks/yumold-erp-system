@@ -1,0 +1,377 @@
+{
+  "quotation_templates": {
+    "default": {
+      "name": "기본 견적서 템플릿",
+      "page_size": "A4",
+      "margins": {
+        "top": 10,
+        "bottom": 10,
+        "left": 10,
+        "right": 10
+      },
+      "header": {
+        "show_logo": true,
+        "company_name": "YUMOLD VIETNAM COMPANY LIMITED",
+        "address": "12th floor Keangnam Hanoi Landmark 72, Area E6, Me Tri Ward, Nam Tu Liem District, Hanoi City, Vietnam",
+        "phone": "+8435-342-9082",
+        "email": "dave-vn@yumold.com",
+        "website": "",
+        "style": {
+          "font_size": 10,
+          "color": "#000000",
+          "align": "right"
+        }
+      },
+      "title": {
+        "text": "QUOTATION",
+        "style": {
+          "font_size": 32,
+          "color": "#000000",
+          "align": "center",
+          "top_margin": 20,
+          "bottom_margin": 20,
+          "bold": true
+        }
+      },
+      "table": {
+        "show_item_code": true,
+        "show_description": true,
+        "show_quantity": true,
+        "show_unit_price": true,
+        "show_total": true,
+        "style": {
+          "header_bg": "#000000",
+          "header_text": "#000000",
+          "header_font_size": 10,
+          "row_bg_1": "#000000",
+          "row_bg_2": "#000000",
+          "border_color": "#000000",
+          "row_font_size": 9,
+          "align": "left",
+          "auto_width": true,
+          "border_width": 0.5
+        }
+      },
+      "footer": {
+        "show_terms": true,
+        "show_signature": true,
+        "show_validity": true,
+        "show_notes": true,
+        "show_contact": true,
+        "terms_text": "Terms and Conditions: Payment due within 30 days.",
+        "signature_text": "고객 서명: _______________",
+        "style": {
+          "font_size": 9,
+          "color": "#000000",
+          "align": "right",
+          "margin_top": 30,
+          "show_border": true
+        }
+      }
+    },
+    "ENG": {
+      "name": "ENG",
+      "page_size": "A4",
+      "margins": {
+        "top": 10,
+        "bottom": 10,
+        "left": 10,
+        "right": 10
+      },
+      "header": {
+        "show_logo": true,
+        "company_name": "YUMOLD VIETNAM COMPANY LIMITED",
+        "address": "12th floor Keangnam Hanoi Landmark 72, Area E6, Me Tri Ward, Nam Tu Liem District, Hanoi City, Vietnam",
+        "phone": "+8435-342-9082",
+        "email": "dave-vn@yumold.com",
+        "website": "",
+        "style": {
+          "font_size": 10,
+          "color": "#000000",
+          "align": "right"
+        }
+      },
+      "title": {
+        "text": "QUOTATION",
+        "style": {
+          "font_size": 32,
+          "color": "#000000",
+          "align": "center",
+          "top_margin": 20,
+          "bottom_margin": 20,
+          "bold": true
+        }
+      },
+      "table": {
+        "show_item_code": true,
+        "show_description": true,
+        "show_quantity": true,
+        "show_unit_price": true,
+        "show_total": true,
+        "style": {
+          "header_bg": "#000000",
+          "header_text": "#000000",
+          "header_font_size": 10,
+          "row_bg_1": "#000000",
+          "row_bg_2": "#000000",
+          "border_color": "#000000",
+          "row_font_size": 9,
+          "align": "left",
+          "auto_width": true,
+          "border_width": 0.5
+        }
+      },
+      "footer": {
+        "show_terms": true,
+        "show_signature": true,
+        "show_validity": true,
+        "show_notes": true,
+        "show_contact": true,
+        "terms_text": "Terms and Conditions: Payment due within 30 days.",
+        "signature_text": "고객 서명: _______________",
+        "style": {
+          "font_size": 9,
+          "color": "#000000",
+          "align": "right",
+          "margin_top": 30,
+          "show_border": true
+        }
+      }
+    },
+    "Test1": {
+      "name": "Test1",
+      "page_size": "A4",
+      "margins": {
+        "top": 10,
+        "bottom": 10,
+        "left": 10,
+        "right": 10
+      },
+      "header": {
+        "show_logo": true,
+        "company_name": "YUMOLD VIETNAM COMPANY LIMITED",
+        "address": "12th floor Keangnam Hanoi Landmark 72, Area E6, Me Tri Ward, Nam Tu Liem District, Hanoi City, Vietnam",
+        "phone": "+8435-342-9082",
+        "email": "dave-vn@yumold.com",
+        "website": "",
+        "style": {
+          "font_size": 10,
+          "color": "#000000",
+          "align": "right"
+        }
+      },
+      "title": {
+        "text": "QUOTATION",
+        "style": {
+          "font_size": 32,
+          "color": "#000000",
+          "align": "center",
+          "top_margin": 20,
+          "bottom_margin": 20,
+          "bold": true
+        }
+      },
+      "table": {
+        "show_item_code": true,
+        "show_description": true,
+        "show_quantity": true,
+        "show_unit_price": true,
+        "show_total": true,
+        "style": {
+          "header_bg": "#000000",
+          "header_text": "#000000",
+          "header_font_size": 10,
+          "row_bg_1": "#000000",
+          "row_bg_2": "#000000",
+          "border_color": "#000000",
+          "row_font_size": 9,
+          "align": "left",
+          "auto_width": true,
+          "border_width": 0.5
+        }
+      },
+      "footer": {
+        "show_terms": true,
+        "show_signature": true,
+        "show_validity": true,
+        "show_notes": true,
+        "show_contact": true,
+        "terms_text": "Terms and Conditions: Payment due within 30 days.",
+        "signature_text": "고객 서명: _______________",
+        "style": {
+          "font_size": 9,
+          "color": "#000000",
+          "align": "right",
+          "margin_top": 30,
+          "show_border": true
+        }
+      }
+    },
+    "Tesstttt": {
+      "name": "Tesstttt",
+      "page_size": "A4",
+      "margins": {
+        "top": 10,
+        "bottom": 10,
+        "left": 10,
+        "right": 10
+      },
+      "header": {
+        "show_logo": true,
+        "company_name": "YUMOLD VIETNAM COMPANY LIMITED",
+        "address": "12th floor Keangnam Hanoi Landmark 72, Area E6, Me Tri Ward, Nam Tu Liem District, Hanoi City, Vietnam",
+        "phone": "+8435-342-9082",
+        "email": "dave-vn@yumold.com",
+        "website": "",
+        "style": {
+          "font_size": 10,
+          "color": "#000000",
+          "align": "right"
+        }
+      },
+      "title": {
+        "text": "QUOTATION",
+        "style": {
+          "font_size": 32,
+          "color": "#000000",
+          "align": "center",
+          "top_margin": 20,
+          "bottom_margin": 20,
+          "bold": true
+        }
+      },
+      "table": {
+        "show_item_code": true,
+        "show_description": true,
+        "show_quantity": true,
+        "show_unit_price": true,
+        "show_total": true,
+        "style": {
+          "header_bg": "#000000",
+          "header_text": "#000000",
+          "header_font_size": 10,
+          "row_bg_1": "#000000",
+          "row_bg_2": "#000000",
+          "border_color": "#000000",
+          "row_font_size": 9,
+          "align": "left",
+          "auto_width": true,
+          "border_width": 0.5
+        }
+      },
+      "footer": {
+        "show_terms": true,
+        "show_signature": true,
+        "show_validity": true,
+        "show_notes": true,
+        "show_contact": true,
+        "terms_text": "Terms and Conditions: Payment due within 30 days.",
+        "signature_text": "고객 서명: _______________",
+        "style": {
+          "font_size": 9,
+          "color": "#000000",
+          "align": "right",
+          "margin_top": 30,
+          "show_border": true
+        }
+      }
+    }
+  },
+  "invoice_templates": {
+    "default": {
+      "name": "기본 인보이스 템플릿",
+      "page_size": "A4",
+      "margins": {
+        "top": 72,
+        "bottom": 72,
+        "left": 72,
+        "right": 72
+      },
+      "header": {
+        "show_logo": true,
+        "company_name": "Your Company Name",
+        "address": "Company Address",
+        "phone": "Phone Number",
+        "email": "Email Address",
+        "style": {
+          "font_size": 12,
+          "color": "#000000"
+        }
+      },
+      "title": {
+        "text": "INVOICE",
+        "style": {
+          "font_size": 24,
+          "color": "#000000",
+          "align": "center"
+        }
+      },
+      "invoice_info": {
+        "show_invoice_number": true,
+        "show_invoice_date": true,
+        "show_due_date": true,
+        "style": {
+          "font_size": 10,
+          "color": "#000000"
+        }
+      },
+      "table": {
+        "show_item_code": true,
+        "show_description": true,
+        "show_quantity": true,
+        "show_unit_price": true,
+        "show_total": true,
+        "show_tax": true,
+        "style": {
+          "header_bg": "#4472C4",
+          "header_text": "#FFFFFF",
+          "row_bg_1": "#FFFFFF",
+          "row_bg_2": "#F2F2F2",
+          "border_color": "#000000"
+        }
+      },
+      "footer": {
+        "show_payment_info": true,
+        "payment_terms": "Payment due within 30 days",
+        "style": {
+          "font_size": 9,
+          "color": "#666666"
+        }
+      }
+    }
+  },
+  "quotation": {
+    "simple_designer": {
+      "name": "Simple Designer Template",
+      "header": {
+        "company_name": "YUMOLD VIETNAM CO., LTD",
+        "company_subtitle": "Hot Runner Systems & Mold Components Specialist",
+        "address": "12th Floor Keangnam Hanoi Landmark 72, Area E6, Me Tri Ward, Nam Tu Liem District, Hanoi City, Vietnam",
+        "phone": "Tel: +84 35 342 9082",
+        "email": "dave-vn@yumold.com",
+        "background_color": "#000000"
+      },
+      "title": {
+        "text": "QUOTATION",
+        "style": {
+          "size": 27,
+          "color": "#000000",
+          "align": "center"
+        }
+      },
+      "table": {
+        "header_color": "#000000",
+        "border_color": "#000000",
+        "font_size": 11,
+        "show_border": true
+      },
+      "footer": {
+        "text": "Terms & Conditions: Payment due within 30 days. Prices are valid for 30 days from quotation date.",
+        "style": {
+          "size": 8,
+          "color": "#666666"
+        }
+      }
+    }
+  }
+}
