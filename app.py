@@ -7,14 +7,37 @@ from datetime import datetime
 import locale
 import sys
 
-# UI 구성 고정 설정 불러오기
-from config_files.ui_config import (
-    is_ui_locked, 
-    get_submenu_config, 
-    get_menu_layout, 
-    get_submenu_styles,
-    SIDEBAR_MENU_STRUCTURE
-)
+# UI 설정을 직접 정의 (GitHub 호환)
+UI_LOCKED = True
+SIDEBAR_MENU_STRUCTURE = {
+    'dashboard': {'icon': '🏠', 'title_key': 'menu_dashboard', 'submenu_options': []},
+    'work_report_management': {'icon': '📝', 'title_key': 'menu_work_report', 'submenu_options': []},
+    'work_status_management': {'icon': '📋', 'title_key': 'menu_work_status', 'submenu_options': []},
+    'personal_status': {'icon': '👤', 'title_key': 'menu_personal', 'submenu_options': []},
+    'exchange_rate_management': {'icon': '💱', 'title_key': 'menu_exchange_rate', 'submenu_options': []},
+    'sales_management': {
+        'icon': '💼', 'title_key': 'menu_sales_management',
+        'submenu_options': ['customer_management', 'quotation_management', 'order_management', 'outsourcing_supply_management', 'shipping_management', 'monthly_sales_management', 'business_process_v2_management', 'supplier_management']
+    },
+    'product_management': {
+        'icon': '📦', 'title_key': 'menu_product_management',
+        'submenu_options': ['master_product_management', 'sales_product_management', 'supply_product_management', 'hr_product_registration']
+    },
+    'executive_management': {
+        'icon': '👔', 'title_key': 'menu_executive_management',
+        'submenu_options': ['approval_management', 'pdf_design_management', 'system_config_management', 'backup_management', 'language_management']
+    },
+    'admin_management': {
+        'icon': '📋', 'title_key': 'menu_admin_management',
+        'submenu_options': ['expense_request_management', 'cash_flow_management', 'employee_management', 'asset_management', 'contract_management', 'schedule_task_management', 'purchase_management']
+    },
+    'system_guide': {'icon': '📚', 'title_key': 'menu_system_guide', 'submenu_options': []}
+}
+
+def is_ui_locked(): return UI_LOCKED
+def get_submenu_config(system_key): return SIDEBAR_MENU_STRUCTURE.get(system_key, None)
+def get_menu_layout(): return {'column_ratio': [1, 6, 1], 'icon_alignment': 'left', 'text_alignment': 'center', 'current_menu_type': 'primary', 'other_menu_type': 'default'}
+def get_submenu_styles(): return {'main_menu_style': {'background_color': '#fff4e6', 'border_color': '#ff9800', 'text_color': '#e65100', 'font_weight': 'bold', 'font_size': '14px'}, 'sub_menu_style': {'background_color': '#f3e5f5', 'border_color': '#9c27b0', 'text_color': '#6a1b9a', 'font_size': '13px'}}
 
 # 환경 변수 강제 설정
 os.environ['PYTHONIOENCODING'] = 'utf-8'
