@@ -8,7 +8,7 @@ import locale
 import sys
 
 # UI 구성 고정 설정 불러오기
-from config_files.ui_config import (
+from config.ui_config import (
     is_ui_locked, 
     get_submenu_config, 
     get_menu_layout, 
