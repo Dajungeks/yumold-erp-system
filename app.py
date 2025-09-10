@@ -773,7 +773,7 @@ def show_main_app(lang_dict):
         current_system = st.session_state.selected_system
         
         # 메뉴 버튼들 (ui_config.py에서 가져오기)
-        from config_files.ui_config import SIDEBAR_MENU_STRUCTURE
+        from config.ui_config import SIDEBAR_MENU_STRUCTURE
         menu_structure = {}
         for key, config in SIDEBAR_MENU_STRUCTURE.items():
             # title_key가 있으면 번역된 텍스트 사용, 없으면 기존 title 사용
@@ -784,7 +784,7 @@ def show_main_app(lang_dict):
             menu_structure[key] = (config['icon'], translated_title)
         
         # 권한 기반 메뉴 필터링
-        from config_files.ui_config import get_allowed_menus
+        from config.ui_config import get_allowed_menus
         access_level = st.session_state.get('access_level', 'user')
         allowed_menus = get_allowed_menus(access_level)
         
