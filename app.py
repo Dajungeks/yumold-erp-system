@@ -1,14 +1,4 @@
-# -*- coding: utf-8 -*-
-import streamlit as st
-import os
-import json
-import pandas as pd
-from datetime import datetime
-import locale
-import sys
 
-# UI 구성 고정 설정 불러오기
-from config_files.ui_config import (
     is_ui_locked, 
     get_submenu_config, 
     get_menu_layout, 
