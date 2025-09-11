@@ -494,35 +494,206 @@ def get_backup_scheduler():
     return st.session_state.managers_cache.get('backup_scheduler')
 
 # 로그인 UI
-def show_login():
-    """로그인 화면을 표시합니다."""
-    st.title("🏢 ERP 시스템")
+def show_login_page(lang_dict):
+    """로그인 페이지를 표시합니다."""
+    # 상단 언어 선택기를 더 좋은 위치에 배치
+    st.markdown('<div style="text-align: right; margin-bottom: 20px;">', unsafe_allow_html=True)
+    show_language_selector()
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    app_title = get_text("app_title", lang_dict)
+    st.title(f"🏢 {app_title}")
     st.markdown("---")
     
-    # 언어 선택기
-    show_language_selector("login")
+    login_type_text = get_text("login_type_select", lang_dict)
+    employee_login_text = get_text("employee_login", lang_dict)
+    master_login_text = get_text("master_login", lang_dict)
+    login_type = st.selectbox(login_type_text, [employee_login_text, master_login_text])
     
-    auth_manager = get_auth_manager()
-    if not auth_manager:
-        st.error("인증 매니저를 로드할 수 없습니다.")
-        return
-    
-    # 로그인 폼
-    with st.form("login_form"):
-        st.subheader("로그인")
-        username = st.text_input("사용자명")
-        password = st.text_input("비밀번호", type="password")
-        submit_button = st.form_submit_button("로그인")
+    if login_type == employee_login_text:
+        st.subheader(f"👤 {employee_login_text}")
         
-        if submit_button:
-            if username and password:
-                with st.spinner("인증 중..."):
-                    user_info = auth_manager.authenticate(username, password)
-                if user_info:
-                    ...
+        with st.form("employee_login_form"):
+            user_id_text = get_text("employee_id", lang_dict)
+            password_text = get_text("password", lang_dict)
+            login_button_text = get_text("login", lang_dict)
+            
+            user_id = st.text_input(user_id_text)
+            password = st.text_input(password_text, type="password")
+            login_submitted = st.form_submit_button(login_button_text, type="primary")
+            
+        if login_submitted:
+            if user_id and password:
+                # 직원 인증 로직 (튜플 반환 처리)
+                auth_result = st.session_state.auth_manager.authenticate_employee(user_id, password)
+                
+                if isinstance(auth_result, tuple) and auth_result[0]:
+                    success, employee_info = auth_result
+                    
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user_id
+                    st.session_state.user_type = employee_info.get('user_type', 'employee')
+                    st.session_state.login_type = "employee"
+                    
+                    # 권한 정보 설정
+                    st.session_state.access_level = employee_info.get('access_level', 'user')
+                    st.session_state.user_name = employee_info.get('name', user_id)
+                    st.session_state.user_position = employee_info.get('position', '')
+                    st.session_state.user_department = employee_info.get('department', '')
+                    
+                    # 법인장인 경우 특별 처리
+                    if st.session_state.user_position == '법인장' or st.session_state.access_level == 'master':
+                        st.session_state.user_type = 'master'
+                        st.session_state.access_level = 'master'
+                    
+                    success_msg = get_text("login_success", lang_dict) if 'login_success' in lang_dict else f"로그인 성공! 권한: {st.session_state.access_level}"
+                    info_msg = get_text("login_complete", lang_dict) if 'login_complete' in lang_dict else "로그인이 완료되었습니다."
+                    st.success(success_msg)
+                    st.info(info_msg)
                     st.rerun()
                 else:
-                    st.error("로그인 실패. 사용자명과 비밀번호를 확인하세요.")
+                    error_msg = get_text("login_failed", lang_dict)
+                    st.error(error_msg)
+            else:
+                warning_msg = get_text("input_credentials", lang_dict)
+                st.warning(warning_msg)
+    
+    elif login_type == master_login_text:  # 마스터 로그인
+        st.subheader(f"🔐 {master_login_text}")
+        
+        with st.form("master_login_form"):
+            master_password_text = get_text("master_password", lang_dict)
+            master_login_button_text = get_text("login", lang_dict)
+            password = st.text_input(master_password_text, type="password")
+            master_login_submitted = st.form_submit_button(master_login_button_text, type="primary")
+            
+        if master_login_submitted:
+            # 로그인 시도 전 세션 상태 완전 초기화 (보안 강화)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.user_type = None
+            st.session_state.user_role = None
+            st.session_state.login_type = None
+            st.session_state.access_level = None
+            st.session_state.user_permissions = {}
+            
+            if password:
+                # 마스터 인증 로직
+                auth_result = st.session_state.auth_manager.authenticate_master(password)
+                print(f"[DEBUG] 마스터 인증 시도: 비밀번호='{password}', 결과={auth_result}")  # 디버깅 로그
+                print(f"[DEBUG] auth_result 타입: {type(auth_result)}")  # 타입 확인
+                
+                # PostgreSQL과 SQLite AuthManager 모두 대응
+                if isinstance(auth_result, dict) and auth_result.get('success'):
+                    # PostgreSQL AuthManager (딕셔너리 반환)
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = auth_result.get('user_id', 'master')
+                    st.session_state.user_type = "master" 
+                    st.session_state.user_role = "master"
+                    st.session_state.login_type = "master"
+                    st.session_state.access_level = "master"
+                    # 마스터는 모든 권한 가짐
+                    st.session_state.user_permissions = {
+                        'can_access_employee_management': True,
+                        'can_access_customer_management': True,
+                        'can_access_product_management': True,
+                        'can_access_supplier_management': True,
+                        'can_access_purchase_order_management': True,
+                        'can_access_inventory_management': True,
+                        'can_access_shipping_management': True,
+                        'can_access_approval_management': True,
+                        'can_access_monthly_sales_management': True,
+                        'can_access_cash_flow_management': True,
+                        'can_access_invoice_management': True,
+                        'can_access_sales_product_management': True,
+                        'can_access_order_management': True,
+                        'can_access_exchange_rate_management': True,
+                        'can_access_personal_status': True,
+                        'can_access_vacation_management': True,
+                        'can_delete_data': True
+                    }
+                    master_success_msg = get_text("master_login_success", lang_dict) if 'master_login_success' in lang_dict else "마스터 로그인 성공!"
+                    st.success(master_success_msg)
+                    print(f"[DEBUG] PostgreSQL 마스터 로그인 성공: 세션 설정 완료")
+                    st.rerun()
+                elif isinstance(auth_result, tuple):
+                    # SQLite AuthManager (튜플 반환)
+                    success, user_info = auth_result
+                    if success is True:
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = "master"
+                        st.session_state.user_type = "master" 
+                        st.session_state.user_role = "master"
+                        st.session_state.login_type = "master"
+                        st.session_state.access_level = "master"
+                        # 마스터는 모든 권한 가짐
+                        st.session_state.user_permissions = {
+                            'can_access_employee_management': True,
+                            'can_access_customer_management': True,
+                            'can_access_product_management': True,
+                            'can_access_supplier_management': True,
+                            'can_access_purchase_order_management': True,
+                            'can_access_inventory_management': True,
+                            'can_access_shipping_management': True,
+                            'can_access_approval_management': True,
+                            'can_access_monthly_sales_management': True,
+                            'can_access_cash_flow_management': True,
+                            'can_access_invoice_management': True,
+                            'can_access_sales_product_management': True,
+                            'can_access_order_management': True,
+                            'can_access_exchange_rate_management': True,
+                            'can_access_personal_status': True,
+                            'can_access_vacation_management': True,
+                            'can_delete_data': True
+                        }
+                        master_success_msg = get_text("master_login_success", lang_dict) if 'master_login_success' in lang_dict else "마스터 로그인 성공!"
+                        st.success(master_success_msg)
+                        print(f"[DEBUG] SQLite 마스터 로그인 성공: 세션 설정 완료")
+                        st.rerun()
+                    else:
+                        master_error_msg = get_text("master_login_failed", lang_dict)
+                        st.error(master_error_msg)
+                        print(f"[DEBUG] 마스터 로그인 실패: SQLite 인증 실패 {auth_result}")
+                elif auth_result is True:
+                    # Legacy AuthManager 대응
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = "master"
+                    st.session_state.user_type = "master" 
+                    st.session_state.user_role = "master"
+                    st.session_state.login_type = "master"
+                    st.session_state.access_level = "master"
+                    # 마스터는 모든 권한 가짐 (Legacy 대응)
+                    st.session_state.user_permissions = {
+                        'can_access_employee_management': True,
+                        'can_access_customer_management': True,
+                        'can_access_product_management': True,
+                        'can_access_supplier_management': True,
+                        'can_access_purchase_order_management': True,
+                        'can_access_inventory_management': True,
+                        'can_access_shipping_management': True,
+                        'can_access_approval_management': True,
+                        'can_access_monthly_sales_management': True,
+                        'can_access_cash_flow_management': True,
+                        'can_access_invoice_management': True,
+                        'can_access_sales_product_management': True,
+                        'can_access_order_management': True,
+                        'can_access_exchange_rate_management': True,
+                        'can_access_personal_status': True,
+                        'can_access_vacation_management': True,
+                        'can_delete_data': True
+                    }
+                    master_success_msg = get_text("master_login_success", lang_dict) if 'master_login_success' in lang_dict else "마스터 로그인 성공!"
+                    st.success(master_success_msg)
+                    print(f"[DEBUG] 마스터 로그인 성공: Legacy 세션 설정 완료")
+                else:
+                    master_error_msg = get_text("master_login_failed", lang_dict)
+                    st.error(master_error_msg)
+                    print(f"[DEBUG] 마스터 로그인 실패: 예상치 못한 반환값: {auth_result}")
+            else:
+                master_warning_msg = get_text("input_master_password", lang_dict)
+                st.warning(master_warning_msg)
+                print(f"[DEBUG] 마스터 로그인: 비밀번호 미입력")
+
 
 
 # 메인 대시보드
