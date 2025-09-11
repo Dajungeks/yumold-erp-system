@@ -516,20 +516,14 @@ def show_login():
         
         if submit_button:
             if username and password:
-                # 인증 시도
-                user_info = auth_manager.authenticate(username, password)
+                with st.spinner("인증 중..."):
+                    user_info = auth_manager.authenticate(username, password)
                 if user_info:
-                    st.session_state.logged_in = True
-                    st.session_state.user_id = user_info.get('user_id')
-                    st.session_state.user_type = user_info.get('user_type')
-                    st.session_state.access_level = user_info.get('access_level')
-                    st.session_state.user_permissions = user_info.get('permissions', {})
-                    st.success("로그인 성공!")
+                    ...
                     st.rerun()
                 else:
                     st.error("로그인 실패. 사용자명과 비밀번호를 확인하세요.")
-            else:
-                st.error("사용자명과 비밀번호를 입력하세요.")
+
 
 # 메인 대시보드
 def show_dashboard():
@@ -607,14 +601,14 @@ def show_customer_management():
         st.error("고객 관리 모듈을 로드할 수 없습니다.")
 
 def show_quotation_management():
-    """견적 관리 페이지"""
     st.title("💰 견적 관리")
-    quotation_manager = get_quotation_manager()
+    with st.spinner("견적 모듈 로딩 중..."):
+        quotation_manager = get_quotation_manager()
     if quotation_manager:
         st.success("견적 관리 모듈이 로드되었습니다.")
-        # 견적 관리 UI 구현
     else:
         st.error("견적 관리 모듈을 로드할 수 없습니다.")
+
 
 def show_product_management():
     """제품 관리 페이지"""
