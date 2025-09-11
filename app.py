@@ -1839,6 +1839,17 @@ def show_business_process_v2_page():
 def show_page_for_menu(system_key):
     """각 메뉴의 실제 기능 페이지를 표시합니다."""
     try:
+        # 대시보드 매니저 지연 초기화
+        if system_key == "dashboard":
+            # 필수 매니저만 초기화
+            if 'employee_manager' not in st.session_state:
+                st.session_state.employee_manager = get_employee_manager()
+            if 'customer_manager' not in st.session_state:
+                st.session_state.customer_manager = get_customer_manager()
+            if 'product_manager' not in st.session_state:
+                st.session_state.product_manager = get_product_manager()
+            if 'vacation_manager' not in st.session_state:
+                st.session_state.vacation_manager = get_vacation_manager()
         # 사용자 권한 가져오기 (마스터는 모든 권한)
         current_user_type = st.session_state.get('user_type', '')
         current_user_id = st.session_state.get('user_id', '')
