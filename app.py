@@ -80,7 +80,6 @@ from managers.legacy.db_customer_manager import DBCustomerManager
 from managers.legacy.db_order_manager import DBOrderManager
 from managers.legacy.db_product_manager import DBProductManager
 
-@st.cache_data(ttl=3600)  # 1시간 캐싱 - 언어 파일 로딩 속도 3배 향상
 def load_language(lang_code):
     """언어 파일을 로드합니다."""
     from managers.legacy.advanced_language_manager import AdvancedLanguageManager
@@ -106,7 +105,6 @@ def load_language(lang_code):
                 with open('languages/ko.json', 'r', encoding='utf-8') as f:
                     return json.load(f)
 
-@st.cache_data(ttl=1800)  # 30분 캐싱 - 텍스트 조회 속도 5배 향상
 def get_text(key, lang_dict=None, **kwargs):
     """언어 딕셔너리에서 텍스트를 가져옵니다."""
     from managers.legacy.advanced_language_manager import AdvancedLanguageManager
@@ -227,7 +225,7 @@ def show_language_selector(location="header"):
 
 def show_download_button():
     """ZIP 파일 다운로드 버튼을 표시합니다."""
-    zip_file = "yumold_erp_essential_fixed.zip"
+    zip_file = "yumold_erp_essential.zip"
     if os.path.exists(zip_file):
         st.sidebar.markdown("---")
         st.sidebar.markdown("### 📦 완전한 ERP 시스템")
@@ -278,85 +276,310 @@ def initialize_session_state():
             from managers.legacy.auth_manager import AuthManager
             st.session_state.auth_manager = AuthManager()
 
-@st.cache_resource  # 매니저 인스턴스 캐싱 - 초기화 시간 90% 단축 (3.4초→0.3초)
-def get_core_managers():
-    """핵심 매니저들만 초기화 (가장 자주 사용되는 것들) - 최적화됨"""
-    print("🚀 초고속 매니저 초기화 시작...")
-    start_time = time.time()
-    
-    core_managers = {}
-    try:
-        # 최적화: 병렬이 아닌 순차 로드로 연결 풀 공유 효율성 극대화
-        core_managers['auth_manager'] = get_auth_manager()
-        core_managers['employee_manager'] = get_employee_manager()  
-        core_managers['customer_manager'] = get_customer_manager()
-        
-        init_time = time.time() - start_time
-        print(f"✅ 핵심 매니저 초기화 완료 (3개, {init_time:.3f}초)")
-        
-        # 성능 향상 로그
-        if init_time < 0.5:
-            print("🎉 초고속 로딩 달성!")
-        elif init_time < 1.0:
-            print("🚀 빠른 로딩 성공!")
-        
-        return core_managers
-    except Exception as e:
-        init_time = time.time() - start_time
-        print(f"⚠️ 핵심 매니저 초기화 오류 ({init_time:.3f}초): {e}")
-        return {}
-
-def get_manager_lazy(manager_name):
-    """매니저를 필요할 때만 로드 (Lazy Loading)"""
-    if manager_name not in st.session_state:
-        print(f"📥 {manager_name} 로딩 중...")
-        
-        # 매니저별 로딩 함수 매핑
-        manager_loaders = {
-            'product_manager': get_product_manager,
-            'supplier_manager': get_supplier_manager,
-            'quotation_manager': get_quotation_manager,
-            'business_process_manager': get_business_process_manager,
-            'approval_manager': get_approval_manager,
-            'product_code_manager': get_product_code_manager,
-            'exchange_rate_manager': get_exchange_rate_manager,
-            'expense_request_manager': get_expense_request_manager,
-            'vacation_manager': get_vacation_manager,
-        }
-        
-        if manager_name in manager_loaders:
-            try:
-                st.session_state[manager_name] = manager_loaders[manager_name]()
-                print(f"✅ {manager_name} 로딩 완료")
-            except Exception as e:
-                print(f"⚠️ {manager_name} 로딩 실패: {e}")
-                st.session_state[manager_name] = None
-    
-    return st.session_state.get(manager_name)
-
 def initialize_managers():
-    """최적화된 매니저 초기화 - 핵심만 먼저, 나머지는 lazy loading"""
+    """모든 매니저 인스턴스를 초기화합니다."""
     if 'managers_initialized' not in st.session_state or not st.session_state.managers_initialized:
-        print("🚀 최적화된 매니저 초기화 시작...")
+        print("🔄 매니저 초기화 시작...")
         try:
-            # 핵심 매니저들만 즉시 로드 (캐싱됨)
-            core_managers = get_core_managers()
-            for name, manager in core_managers.items():
-                if name not in st.session_state:
-                    st.session_state[name] = manager
+            # 핵심 매니저들 먼저 초기화 (PostgreSQL/SQLite 자동 선택)
+            if 'auth_manager' not in st.session_state:
+                st.session_state.auth_manager = get_auth_manager()
+            if 'employee_manager' not in st.session_state:
+                st.session_state.employee_manager = get_employee_manager()
+            if 'customer_manager' not in st.session_state:
+                st.session_state.customer_manager = get_customer_manager()
+            if 'product_manager' not in st.session_state:
+                st.session_state.product_manager = get_product_manager()
+            if 'supplier_manager' not in st.session_state:
+                st.session_state.supplier_manager = get_supplier_manager()
+            if 'quotation_manager' not in st.session_state:
+                st.session_state.quotation_manager = get_quotation_manager()
             
-            # 나머지 매니저들은 get_manager_lazy() 함수로 필요할 때만 로드됨
-            print("✅ 최적화된 매니저 초기화 완료 (속도 70% 향상)")
+            # 초기화 완료 로그
+            print("✅ 핵심 매니저들 초기화 완료")
+            # 업무 프로세스 매니저 (SQLite)
+            if 'business_process_manager' not in st.session_state:
+                try:
+                    st.session_state.business_process_manager = get_business_process_manager()
+                    # SQLite 기반 업무 프로세스 매니저 (순수 SQLite 사용)
+                    # CSV 마이그레이션은 자동으로 처리됨
+                except Exception as bp_error:
+                    st.warning(f"SQLite 업무 프로세스 매니저 초기화 실패: {str(bp_error)}")
+                    # 폴백으로 기존 매니저 사용
+                    from scripts.business_process_manager_v2 import BusinessProcessManagerV2 as BusinessProcessManager
+                    st.session_state.business_process_manager = BusinessProcessManager()
+            if 'approval_manager' not in st.session_state:
+                st.session_state.approval_manager = get_approval_manager()
+            # 제품 코드 매니저 (SQLite)
+            if 'product_code_manager' not in st.session_state:
+                try:
+                    st.session_state.product_code_manager = get_product_code_manager()
+                    # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                    if hasattr(st.session_state.product_code_manager, 'migrate_from_csv'):
+                        st.session_state.product_code_manager.migrate_from_csv()
+                except Exception as pcm_error:
+                    st.warning(f"SQLite 제품 코드 매니저 초기화 실패: {str(pcm_error)}")
+                    # 폴백으로 기존 매니저 사용
+                    from scripts.product_code_generator import ProductCodeGenerator as ProductCodeManager
+                    # master_product_manager가 아직 초기화되지 않았으므로 None으로 초기화
+                    st.session_state.product_code_manager = ProductCodeManager(None)
+            # st.session_state.pdf_design_manager = PDFDesignManager()  # PDF 디자인 매니저 비활성화
+            # 환율 관리자 (SQLite)
+            if 'exchange_rate_manager' not in st.session_state:
+                try:
+                    st.session_state.exchange_rate_manager = get_exchange_rate_manager()
+                    # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                    if hasattr(st.session_state.exchange_rate_manager, 'migrate_from_csv'):
+                        st.session_state.exchange_rate_manager.migrate_from_csv()
+                except Exception as erm_error:
+                    st.warning(f"SQLite 환율 관리자 초기화 실패: {str(erm_error)}")
+                    # 폴백으로 기존 매니저 사용
+                    from managers.legacy.exchange_rate_manager import ExchangeRateManager
+                    st.session_state.exchange_rate_manager = ExchangeRateManager()
+            if 'manual_exchange_rate_manager' not in st.session_state:
+                st.session_state.manual_exchange_rate_manager = ManualExchangeRateManager()
+            # 지출 요청 매니저 (SQLite)
+            if 'expense_request_manager' not in st.session_state:
+                try:
+                    st.session_state.expense_request_manager = get_expense_request_manager()
+                    # SQLite 지출 요청 매니저 (순수 SQLite 사용)
+                    # CSV 마이그레이션은 자동으로 처리됨
+                except Exception as er_error:
+                    st.warning(f"SQLite 지출 요청 매니저 초기화 실패: {str(er_error)}")
+                    # 폴백으로 기존 매니저 사용
+                    from managers.legacy.expense_request_manager import ExpenseRequestManager
+                    st.session_state.expense_request_manager = ExpenseRequestManager()
+            # 휴가 매니저 (SQLite)
+            if 'vacation_manager' not in st.session_state:
+                try:
+                    st.session_state.vacation_manager = get_vacation_manager()
+                    # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                    if hasattr(st.session_state.vacation_manager, 'migrate_from_csv'):
+                        st.session_state.vacation_manager.migrate_from_csv()
+                except Exception as vm_error:
+                    st.warning(f"SQLite 휴가 매니저 초기화 실패: {str(vm_error)}")
+                    # 폴백으로 기존 매니저 사용
+                    from managers.legacy.vacation_manager import VacationManager
+                    st.session_state.vacation_manager = VacationManager()
+            if 'migration_manager' not in st.session_state:
+                st.session_state.migration_manager = MigrationManager()
+            # 판매 제품 매니저 (SQLite)
+            try:
+                st.session_state.sales_product_manager = get_sales_product_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.sales_product_manager, 'migrate_from_csv'):
+                    st.session_state.sales_product_manager.migrate_from_csv()
+            except Exception as sp_error:
+                st.warning(f"SQLite 판매 제품 매니저 초기화 실패: {str(sp_error)}")
+                # 폴백으로 기존 매니저 사용
+                from managers.legacy.sales_product_manager import SalesProductManager
+                st.session_state.sales_product_manager = SalesProductManager()
             
-            # 필수 매니저들만 미리 로드 (매우 자주 사용되는 것들)
-            st.session_state.manual_exchange_rate_manager = ManualExchangeRateManager()
-            st.session_state.migration_manager = MigrationManager()
+            # 완성품 매니저 (SQLite)
+            try:
+                st.session_state.finished_product_manager = get_finished_product_manager()
+            except Exception as fp_error:
+                st.warning(f"완성품 매니저 초기화 실패: {str(fp_error)}")
+                st.session_state.finished_product_manager = None
             
-            # 나머지 모든 매니저는 get_manager_lazy()로 lazy loading
-            # (기존 73개 초기화 블록 제거 - 속도 3배 향상)
+            # 공급 제품 매니저 (기존 유지 - 복잡한 로직으로 인해)
+            st.session_state.supply_product_manager = SupplyProductManager()
+            
+            # 업무 상태 매니저 (SQLite)
+            try:
+                st.session_state.work_status_manager = get_work_status_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.work_status_manager, 'migrate_from_csv'):
+                    st.session_state.work_status_manager.migrate_from_csv()
+            except Exception as wsm_error:
+                st.warning(f"SQLite 업무 상태 매니저 초기화 실패: {str(wsm_error)}")
+                # 폴백으로 기존 매니저 사용
+                try:
+                    from managers.legacy.work_status_manager import WorkStatusManager
+                    st.session_state.work_status_manager = WorkStatusManager()
+                except:
+                    st.session_state.work_status_manager = None
+            
+            # 주간 보고서 매니저 (SQLite)
+            try:
+                st.session_state.weekly_report_manager = get_weekly_report_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.weekly_report_manager, 'migrate_from_csv'):
+                    st.session_state.weekly_report_manager.migrate_from_csv()
+            except Exception as wrm_error:
+                st.warning(f"SQLite 주간 보고서 매니저 초기화 실패: {str(wrm_error)}")
+                # 폴백으로 기존 매니저 사용
+                try:
+                    from managers.legacy.weekly_report_manager import WeeklyReportManager
+                    st.session_state.weekly_report_manager = WeeklyReportManager()
+                except:
+                    st.session_state.weekly_report_manager = None
+            # 시스템 설정 매니저 (SQLite)
+            try:
+                st.session_state.system_config_manager = get_system_config_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.system_config_manager, 'migrate_from_csv'):
+                    st.session_state.system_config_manager.migrate_from_csv()
+            except Exception as scm_error:
+                st.warning(f"SQLite 시스템 설정 매니저 초기화 실패: {str(scm_error)}")
+                # 폴백으로 기존 매니저 사용
+                from managers.legacy.system_config_manager import SystemConfigManager
+                st.session_state.system_config_manager = SystemConfigManager()
+            st.session_state.cash_flow_manager = get_cash_flow_manager()
+            # 현금 거래 매니저 (SQLite)
+            try:
+                st.session_state.cash_transaction_manager = get_cash_transaction_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.cash_transaction_manager, 'migrate_from_csv'):
+                    st.session_state.cash_transaction_manager.migrate_from_csv()
+            except Exception as ct_error:
+                st.warning(f"SQLite 현금 거래 매니저 초기화 실패: {str(ct_error)}")
+                # 폴백으로 기존 매니저 사용
+                from managers.legacy.cash_transaction_manager import CashTransactionManager
+                st.session_state.cash_transaction_manager = CashTransactionManager()
+            # 통합 제품 매니저 (SQLite)
+            try:
+                st.session_state.master_product_manager = get_master_product_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.master_product_manager, 'migrate_from_csv'):
+                    st.session_state.master_product_manager.migrate_from_csv()
+            except Exception as mpm_error:
+                st.warning(f"SQLite 통합 제품 매니저 초기화 실패: {str(mpm_error)}")
+                # 폴백으로 기존 매니저 사용
+                from managers.legacy.master_product_manager import MasterProductManager
+                st.session_state.master_product_manager = MasterProductManager()
+            st.session_state.order_manager = get_order_manager()
+            # 공지사항 매니저 (SQLite)
+            try:
+                st.session_state.notice_manager = get_notice_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.notice_manager, 'migrate_from_csv'):
+                    st.session_state.notice_manager.migrate_from_csv()
+            except Exception as nm_error:
+                st.warning(f"SQLite 공지사항 매니저 초기화 실패: {str(nm_error)}")
+                # 폴백으로 기존 매니저 사용
+                from managers.legacy.notice_manager import NoticeManager
+                st.session_state.notice_manager = NoticeManager()
+            
+            # 노트 매니저 (SQLite)
+            try:
+                st.session_state.note_manager = get_note_manager()
+            except Exception as note_error:
+                st.warning(f"SQLite 노트 매니저 초기화 실패: {str(note_error)}")
+                st.session_state.note_manager = None
+            
+            st.session_state.contract_manager = ContractManager()
+            
+            # SQLite 매니저들 초기화
+            st.session_state.database_manager = DatabaseManager()
+            st.session_state.db_employee_manager = DBEmployeeManager()
+            st.session_state.db_customer_manager = DBCustomerManager()
+            st.session_state.db_order_manager = DBOrderManager()
+            st.session_state.db_product_manager = DBProductManager()
+            
+            # 월별 매출관리 매니저 (SQLite)
+            try:
+                st.session_state.monthly_sales_manager = get_monthly_sales_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.monthly_sales_manager, 'migrate_from_csv'):
+                    st.session_state.monthly_sales_manager.migrate_from_csv()
+            except Exception as monthly_error:
+                st.warning(f"SQLite 월별 매출관리 매니저 초기화 실패: {str(monthly_error)}")
+                # 폴백으로 기존 매니저 사용
+                try:
+                    from managers.legacy.monthly_sales_manager import MonthlySalesManager
+                    st.session_state.monthly_sales_manager = MonthlySalesManager()
+                except:
+                    st.session_state.monthly_sales_manager = None
+            
+            # 인보이스 매니저 (SQLite)
+            try:
+                st.session_state.invoice_manager = get_invoice_manager()
+                # 기존 CSV 데이터 마이그레이션 (SQLite만)
+                if hasattr(st.session_state.invoice_manager, 'migrate_from_csv'):
+                    st.session_state.invoice_manager.migrate_from_csv()
+            except Exception as inv_error:
+                st.warning(f"SQLite 인보이스 매니저 초기화 실패: {str(inv_error)}")
+                # 폴백으로 기존 매니저 사용
+                try:
+                    from managers.legacy.invoice_manager import InvoiceManager
+                    st.session_state.invoice_manager = InvoiceManager()
+                except ImportError:
+                    st.session_state.invoice_manager = None
+                
+            try:
+                st.session_state.inventory_manager = get_inventory_manager()
+            except Exception as inv_error:
+                st.warning(f"SQLite 재고 매니저 초기화 실패: {str(inv_error)}")
+                st.session_state.inventory_manager = None
+                
+            # 배송 매니저 (이미 SQLite 버전 있음)
+            try:
+                st.session_state.shipping_manager = st.session_state.sqlite_shipping_manager
+                if st.session_state.shipping_manager is None:
+                    from managers.legacy.shipping_manager import ShippingManager
+                    st.session_state.shipping_manager = ShippingManager()
+            except Exception:
+                st.session_state.shipping_manager = None
+            
+            # SQLite 배송 매니저 초기화
+            try:
+                st.session_state.sqlite_shipping_manager = get_shipping_manager()
+            except ImportError:
+                st.session_state.sqlite_shipping_manager = None
+            
+            # PDF 언어 매니저를 별도로 초기화
+            try:
+                from managers.legacy.pdf_language_manager import PDFLanguageManager as PDFLangMgr
+                st.session_state.pdf_language_manager = PDFLangMgr()
+            except Exception as pdf_error:
+                st.warning(f"PDF 언어 매니저 초기화 실패: {str(pdf_error)}")
+                st.session_state.pdf_language_manager = None
+            
+            # SQLiteOrderManager 초기화
+            try:
+                st.session_state.sqlite_order_manager = get_order_manager()
+            except Exception as order_error:
+                st.warning(f"SQLite 주문 매니저 초기화 실패: {str(order_error)}")
+                st.session_state.sqlite_order_manager = None
+            
+            # 업무 상태 관리 매니저
+            try:
+                from managers.legacy.work_status_manager import WorkStatusManager
+                st.session_state.work_status_manager = WorkStatusManager()
+            except Exception as ws_error:
+                st.warning(f"업무 상태 관리 매니저 초기화 실패: {str(ws_error)}")
+                st.session_state.work_status_manager = None
+            
+            # 제품 카테고리 설정 매니저
+            try:
+                from managers.legacy.product_category_config_manager import ProductCategoryConfigManager
+                st.session_state.product_category_config_manager = ProductCategoryConfigManager()
+            except Exception as pc_error:
+                error_msg = get_text("product_category_manager_init_failed", fallback="제품 카테고리 설정 매니저 초기화 실패")
+                st.warning(f"{error_msg}: {str(pc_error)}")
+                st.session_state.product_category_config_manager = None
+                
+            # 백업 매니저 (새로운 UTF-8 안전 버전)
+            try:
+                st.session_state.backup_manager = NewBackupManager()
+            except Exception as bm_error:
+                error_msg = get_text("backup_manager_init_failed", fallback="백업 매니저 초기화 실패")
+                st.warning(f"{error_msg}: {str(bm_error)}")
+                st.session_state.backup_manager = None
+                
+            # 백업 스케줄러 시작
+            try:
+                if not backup_scheduler.is_running():
+                    backup_scheduler.start_scheduler()
+                st.session_state.backup_scheduler = backup_scheduler
+            except Exception as bs_error:
+                error_msg = get_text("backup_scheduler_init_failed", fallback="백업 스케줄러 초기화 실패")
+                st.warning(f"{error_msg}: {str(bs_error)}")
+                st.session_state.backup_scheduler = None
             
             st.session_state.managers_initialized = True
-            print("🎉 최적화된 매니저 초기화 완료! (73개 → 5개로 대폭 축소)")
+            print("🎉 모든 매니저 초기화 완료!")
         except Exception as e:
             error_msg = get_text("manager_init_error", fallback="매니저 초기화 중 오류")
             st.error(f"{error_msg}: {str(e)}")
@@ -365,13 +588,6 @@ def initialize_managers():
             print(f"⚠️ 매니저 초기화 중 오류 발생하였지만 계속 진행: {e}")
     else:
         print("⚡ 매니저들이 이미 초기화됨 - 스킵")
-
-def ensure_manager_loaded(manager_name):
-    """매니저가 로드되어 있지 않으면 lazy loading으로 로드"""
-    if manager_name not in st.session_state or st.session_state[manager_name] is None:
-        return get_manager_lazy(manager_name)
-    return st.session_state[manager_name]
-
 
 def show_login_page(lang_dict):
     """로그인 페이지를 표시합니다."""
