@@ -267,6 +267,12 @@ def initialize_session_state():
 
 def initialize_managers():
     """모든 매니저 인스턴스를 초기화합니다."""
+    # 로그인 속도 개선을 위해 초기화 건너뛰기
+    if 'managers_initialized' not in st.session_state:
+        st.session_state.managers_initialized = True
+    return  # 여기서 바로 종료
+    
+    # 아래 코드는 실행되지 않음 (나중에 필요할 때 사용)
     if 'managers_initialized' not in st.session_state or not st.session_state.managers_initialized:
         print("🔄 매니저 초기화 시작...")
         try:
