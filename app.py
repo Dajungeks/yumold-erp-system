@@ -1884,15 +1884,7 @@ def show_page_for_menu(system_key):
         if system_key == "dashboard":
             from pages.menu_dashboard import show_main_dashboard
             
-            # 매니저 안전 초기화
-            if 'employee_manager' not in st.session_state:
-                st.session_state.employee_manager = get_employee_manager()
-            if 'customer_manager' not in st.session_state:
-                st.session_state.customer_manager = get_customer_manager()
-            if 'product_manager' not in st.session_state:
-                st.session_state.product_manager = get_product_manager()
-            if 'vacation_manager' not in st.session_state:
-                st.session_state.vacation_manager = get_vacation_manager()
+            # 매니저는 이미 위에서 초기화했으므로 삭제
             
             managers = {
                 'employee_manager': st.session_state.employee_manager,
