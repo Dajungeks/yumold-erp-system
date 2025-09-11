@@ -2387,6 +2387,14 @@ def show_page_for_menu(system_key):
                 managers=managers
             )
         elif system_key == "personal_status":
+            # ✅ 필요한 매니저 보장
+            if 'employee_manager' not in st.session_state:
+                st.session_state.employee_manager = get_employee_manager()
+            if 'vacation_manager' not in st.session_state:
+                st.session_state.vacation_manager = get_vacation_manager()
+            if 'approval_manager' not in st.session_state:
+                st.session_state.approval_manager = get_approval_manager()
+
             from pages.personal_status_page import show_personal_status_page
             show_personal_status_page(
                 st.session_state.employee_manager,
@@ -2395,6 +2403,7 @@ def show_page_for_menu(system_key):
                 user_permissions,
                 get_text
             )
+
         elif system_key == "work_report_management":
             from pages.work_report_page import show_work_report_page
             show_work_report_page(get_text)
