@@ -1919,8 +1919,8 @@ def show_page_for_menu(system_key):
         elif system_key == "customer_management":
             # 서브메뉴에 돌아가기 버튼 추가
             # 매니저 초기화
-        if 'customer_manager' not in st.session_state:
-            st.session_state.customer_manager = get_customer_manager()
+            if 'customer_manager' not in st.session_state:
+                st.session_state.customer_manager = get_customer_manager()
             col_header, col_back = st.columns([3, 1])
             with col_header:
                 st.header("👥 고객 관리")
