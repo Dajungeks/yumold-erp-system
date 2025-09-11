@@ -1,4 +1,8 @@
-
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
+import plotly.express as px
+import plotly.graph_objects as go
 
 def show_dashboard_page(employee_manager, customer_manager, product_manager, quotation_manager, selected_submenu, get_text):
     """개선된 대시보드 페이지를 표시합니다."""
