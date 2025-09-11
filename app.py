@@ -2084,9 +2084,9 @@ def show_page_for_menu(system_key):
                 st.session_state.get('user_name', ''),
                 get_text
             )
-       elif system_key == "quotation_management":
-        if 'quotation_manager' not in st.session_state:
-            st.session_state.quotation_manager = get_quotation_manager()
+        elif system_key == "quotation_management":
+            if 'quotation_manager' not in st.session_state:
+                st.session_state.quotation_manager = get_quotation_manager()
             # 서브메뉴에 돌아가기 버튼 추가
             col_header, col_back = st.columns([3, 1])
             with col_header:
@@ -2098,10 +2098,6 @@ def show_page_for_menu(system_key):
             
             from pages.quotation_page import main
             main()
-
-
-
-
         elif system_key == "shipping_management":
             # 서브메뉴에 돌아가기 버튼 추가
             col_header, col_back = st.columns([3, 1])
