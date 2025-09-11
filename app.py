@@ -1938,8 +1938,8 @@ def show_page_for_menu(system_key):
 
 
         elif system_key == "supplier_management":
-        if 'supplier_manager' not in st.session_state:
-            st.session_state.supplier_manager = get_supplier_manager()
+            if 'supplier_manager' not in st.session_state:
+                st.session_state.supplier_manager = get_supplier_manager()
             from pages.supplier_page import show_supplier_page
             # 매니저 초기화
         if 'supplier_manager' not in st.session_state:
@@ -1950,8 +1950,8 @@ def show_page_for_menu(system_key):
                 get_text
             )
         elif system_key == "product_registration":
-        if 'product_manager' not in st.session_state:
-            st.session_state.product_manager = get_product_manager()
+            if 'product_manager' not in st.session_state:
+                st.session_state.product_manager = get_product_manager()
             # 통합 제품 등록 페이지
             # 매니저 초기화
         if 'master_product_manager' not in st.session_state:
@@ -2019,8 +2019,8 @@ def show_page_for_menu(system_key):
             from pages.work_status_page import show_work_status_page
             show_work_status_page(get_text)
         elif system_key == "order_management":
-        if 'order_manager' not in st.session_state:
-            st.session_state.order_manager = get_order_manager()
+            if 'order_manager' not in st.session_state:
+                st.session_state.order_manager = get_order_manager()
             # 서브메뉴에 돌아가기 버튼 추가
             col_header, col_back = st.columns([3, 1])
             with col_header:
