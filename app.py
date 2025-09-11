@@ -1897,9 +1897,9 @@ def show_page_for_menu(system_key):
             # 서브메뉴에 돌아가기 버튼 추가 (페이지 내 헤더 제거하고 여기서만 표시)
             # 매니저 초기화
             if 'employee_manager' not in st.session_state:
-            st.session_state.employee_manager = get_employee_manager()
+                st.session_state.employee_manager = get_employee_manager()
             if 'auth_manager' not in st.session_state:
-            st.session_state.auth_manager = get_auth_manager()
+                st.session_state.auth_manager = get_auth_manager()
             col_header, col_back = st.columns([3, 1])
             with col_header:
                 st.header("👥 직원 관리")
