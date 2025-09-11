@@ -7,6 +7,12 @@ from datetime import datetime
 import locale
 import sys
 
+# ---- 캐시 리소스: 견적 매니저 ----
+@st.cache_resource
+def get_quotation_manager_cached():
+    # 기존에 쓰던 생성 함수를 그대로 재사용
+    return get_quotation_manager()
+
 # UI 구성 고정 설정 불러오기
 from config_files.ui_config import (
     is_ui_locked, 
@@ -1942,8 +1948,8 @@ def show_page_for_menu(system_key):
                 st.session_state.supplier_manager = get_supplier_manager()
             from pages.supplier_page import show_supplier_page
             # 매니저 초기화
-        if 'supplier_manager' not in st.session_state:
-            st.session_state.supplier_manager = get_supplier_manager()
+            if 'supplier_manager' not in st.session_state:
+                st.session_state.supplier_manager = get_supplier_manager()
             show_supplier_page(
                 st.session_state.supplier_manager, 
                 {},  # user_permissions
@@ -1954,12 +1960,12 @@ def show_page_for_menu(system_key):
                 st.session_state.product_manager = get_product_manager()
             # 통합 제품 등록 페이지
             # 매니저 초기화
-        if 'master_product_manager' not in st.session_state:
-            st.session_state.master_product_manager = get_master_product_manager()
-        if 'finished_product_manager' not in st.session_state:
-            st.session_state.finished_product_manager = get_finished_product_manager()
-        if 'product_code_manager' not in st.session_state:
-            st.session_state.product_code_manager = get_product_code_manager()
+            if 'master_product_manager' not in st.session_state:
+                st.session_state.master_product_manager = get_master_product_manager()
+            if 'finished_product_manager' not in st.session_state:
+                st.session_state.finished_product_manager = get_finished_product_manager()
+            if 'product_code_manager' not in st.session_state:
+                st.session_state.product_code_manager = get_product_code_manager()
             col_header, col_back = st.columns([3, 1])
             with col_header:
                 st.header("📝 제품 등록")
@@ -2085,8 +2091,10 @@ def show_page_for_menu(system_key):
                 get_text
             )
         elif system_key == "quotation_management":
+            # 견적 매니저는 한 번만 생성(캐시 사용)
             if 'quotation_manager' not in st.session_state:
-                st.session_state.quotation_manager = get_quotation_manager()
+                st.session_state.quotation_manager = get_quotation_manager_cached()
+
             # 서브메뉴에 돌아가기 버튼 추가
             col_header, col_back = st.columns([3, 1])
             with col_header:
@@ -2095,9 +2103,12 @@ def show_page_for_menu(system_key):
                 if st.button("↩️ 영업관리", key="back_to_sales_from_quotation"):
                     st.session_state.selected_system = "sales_management"
                     st.rerun()
-            
-            from pages.quotation_page import main
-            main()
+
+            # 페이지 함수 호출 (가벼운 로딩 스피너)
+            from pages.quotation_page import main as quotation_main
+            with st.spinner("견적 페이지 로딩 중..."):
+                quotation_main()
+
         elif system_key == "shipping_management":
             # 서브메뉴에 돌아가기 버튼 추가
             col_header, col_back = st.columns([3, 1])
