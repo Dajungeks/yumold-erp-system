@@ -133,9 +133,10 @@ class PostgreSQLSystemConfigManager(BasePostgreSQLManager):
             self.log_error(f"설정값 업데이트 실패: {e}")
             return False, f"설정값 업데이트 실패: {e}"
     
-    def get_configs(self, category=None, is_public=None):
-        """조건에 따른 설정 조회"""
+    def get_configs(self, category=None, is_public=None) -> 'pd.DataFrame':
+        """조건에 따른 설정을 DataFrame으로 조회"""
         try:
+            import pandas as pd
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
@@ -160,14 +161,18 @@ class PostgreSQLSystemConfigManager(BasePostgreSQLManager):
                     config = dict(zip(columns, row))
                     configs.append(config)
                 
-                return configs
+                if configs:
+                    return pd.DataFrame(configs)
+                else:
+                    return pd.DataFrame()
                 
         except Exception as e:
             self.log_error(f"설정 조회 실패: {e}")
-            return []
+            import pandas as pd
+            return pd.DataFrame()
     
-    def get_all_items(self):
-        """모든 항목 조회 (get_configs 호출)"""
+    def get_all_items(self) -> 'pd.DataFrame':
+        """모든 항목을 DataFrame으로 조회 (get_configs 호출)"""
         return self.get_configs()
     
     def add_config(self, config_data):
