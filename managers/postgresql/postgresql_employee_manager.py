@@ -24,7 +24,9 @@ class PostgreSQLEmployeeManager(BasePostgreSQLManager):
         super().__init__()
         self.table_name = "employees"
         self._ensure_table_exists()
-    
+        # ✅ 추가: 연차 관련 컬럼 보장
+        self._ensure_annual_leave_columns()
+
     def _ensure_table_exists(self):
         """employees 테이블 존재 확인 및 생성"""
         create_sql = """
@@ -58,6 +60,7 @@ class PostgreSQLEmployeeManager(BasePostgreSQLManager):
             );
         """
         self.create_table_if_not_exists(self.table_name, create_sql)
+
     
     def get_all_employees_list(self, limit: int = 100) -> List[EmployeeDict]:
         """모든 직원 정보를 리스트로 가져옵니다."""
