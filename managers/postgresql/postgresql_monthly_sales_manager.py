@@ -6,6 +6,7 @@ PostgreSQL MonthlySales 관리 매니저
 from .base_postgresql_manager import BasePostgreSQLManager
 from datetime import datetime
 import uuid
+import pandas as pd
 
 class PostgreSQLMonthlySalesManager(BasePostgreSQLManager):
     """PostgreSQL MonthlySales 관리 매니저"""
@@ -22,7 +23,7 @@ class PostgreSQLMonthlySalesManager(BasePostgreSQLManager):
                 
                 # 기본 테이블 생성 (SQLite 매니저 참조하여 수정 필요)
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS monthly_saless (
+                    CREATE TABLE IF NOT EXISTS monthly_sales (
                         id SERIAL PRIMARY KEY,
                         item_id VARCHAR(50) UNIQUE NOT NULL,
                         name VARCHAR(200),
@@ -38,12 +39,12 @@ class PostgreSQLMonthlySalesManager(BasePostgreSQLManager):
         except Exception as e:
             self.log_error(f"MonthlySales 테이블 초기화 실패: {e}")
     
-    def get_all_items(self):
-        """모든 항목 조회"""
+    def get_all_items(self) -> 'pd.DataFrame':
+        """모든 항목을 DataFrame으로 조회"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM monthly_saless ORDER BY created_date DESC")
+                cursor.execute("SELECT * FROM monthly_sales ORDER BY created_date DESC")
                 
                 columns = [desc[0] for desc in cursor.description]
                 items = []
@@ -52,18 +53,21 @@ class PostgreSQLMonthlySalesManager(BasePostgreSQLManager):
                     item = dict(zip(columns, row))
                     items.append(item)
                 
-                return items
+                if items:
+                    return pd.DataFrame(items)
+                else:
+                    return pd.DataFrame()
                 
         except Exception as e:
             self.log_error(f"항목 조회 실패: {e}")
-            return []
+            return pd.DataFrame()
     
     def get_statistics(self):
         """통계 조회"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM monthly_saless")
+                cursor.execute("SELECT COUNT(*) FROM monthly_sales")
                 total_count = cursor.fetchone()[0]
                 
                 return {'total_count': total_count}
