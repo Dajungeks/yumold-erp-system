@@ -597,16 +597,38 @@ def show_login_page(lang_dict):
                     result = cursor.fetchone()
                     
                     if result:
-                        # 비밀번호 검증 (NULL이면 1111, 아니면 입력값과 비교)
+                        # bcrypt 해시 비교를 위한 import
+                        import bcrypt
+                        
+                        # 비밀번호 검증
                         password_valid = False
-                        if result[5] is None and password == "1111":
-                            password_valid = True
-                            need_change = True  # 기본 비밀번호면 변경 필요
-                        elif result[5] == password:
-                            password_valid = True
-                            need_change = result[6] if result[6] is not None else False
+                        need_change = False
+                        
+                        if result[5] is None:
+                            # 비밀번호가 NULL이면 기본 비밀번호 "1111" 확인
+                            if password == "1111":
+                                password_valid = True
+                                need_change = True
+                        else:
+                            # bcrypt 해시 비교
+                            try:
+                                # bcrypt는 $2b$로 시작
+                                if result[5].startswith('$2b$'):
+                                    password_valid = bcrypt.checkpw(
+                                        password.encode('utf-8'), 
+                                        result[5].encode('utf-8')
+                                    )
+                                else:
+                                    # 일반 문자열 비교 (fallback)
+                                    password_valid = (result[5] == password)
+                                
+                                need_change = result[6] if result[6] is not None else False
+                            except Exception as e:
+                                print(f"비밀번호 검증 오류: {e}")
+                                password_valid = False
                         
                         if password_valid:
+                            # 로그인 성공 (나머지 코드는 동일)
                             # 로그인 성공 - 시도 횟수 초기화
                             cursor.execute("""
                                 UPDATE employees 
@@ -830,6 +852,11 @@ def show_login_page(lang_dict):
 
 
 def show_main_app(lang_dict):
+    # 비밀번호 변경 필요 여부 확인 (임시 디버그)
+    if st.session_state.get('password_change_required'):
+        st.warning("⚠️ 보안을 위해 비밀번호를 변경해주세요.")
+    
+    # 기존 코드...
     """메인 애플리케이션을 표시합니다."""
     
     # 모바일 최적화 설정
