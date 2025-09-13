@@ -6,7 +6,15 @@ PostgreSQL 기반 고객 관리 시스템
 import pandas as pd
 from datetime import datetime
 import logging
+from typing import List, Optional, Union, Dict, Any
 from .base_postgresql_manager import BasePostgreSQLManager
+from schemas.customer_types import (
+    CustomerDict,
+    CustomerCreateDict,
+    CustomerUpdateDict,
+    CustomerSearchDict
+)
+from schemas.base_types import APIResponse, SuccessResponse, ErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +47,28 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
         """
         self.create_table_if_not_exists(self.table_name, create_sql)
     
-    def get_all_customers(self, limit=100):
-        """모든 고객 정보를 가져옵니다."""
+    def get_all_customers(self, limit: int = 100) -> pd.DataFrame:
+        """모든 고객 정보를 DataFrame으로 가져옵니다."""
+        query = """
+            SELECT customer_id, company_name, contact_person, email, phone,
+                   country, city, address, business_type, status, notes,
+                   created_date, updated_date
+            FROM customers
+            ORDER BY company_name
+            LIMIT %s
+        """
+        try:
+            result = self.execute_query(query, (limit,), fetch_all=True)
+            if result:
+                return pd.DataFrame(result)
+            else:
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"고객 목록 조회 오류: {e}")
+            return pd.DataFrame()
+    
+    def get_all_customers_list(self, limit: int = 100) -> List[CustomerDict]:
+        """모든 고객 정보를 리스트로 가져옵니다. (SQLite 호환)"""
         query = """
             SELECT customer_id, company_name, contact_person, email, phone,
                    country, city, address, business_type, status, notes,
@@ -55,20 +83,11 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 목록 조회 오류: {e}")
             return []
     
-    def get_all_customers_list(self, limit=100):
-        """모든 고객 정보를 리스트로 가져옵니다. (SQLite 호환)"""
-        return self.get_all_customers(limit)
+    def get_customers_dataframe(self) -> pd.DataFrame:
+        """고객 정보를 DataFrame으로 가져옵니다. (기존 호환성 유지)"""
+        return self.get_all_customers()
     
-    def get_customers_dataframe(self):
-        """고객 정보를 DataFrame으로 가져옵니다."""
-        try:
-            customers_list = self.get_all_customers()
-            return pd.DataFrame(customers_list)
-        except Exception as e:
-            logger.error(f"고객 DataFrame 조회 오류: {e}")
-            return pd.DataFrame()
-    
-    def get_customer_by_id(self, customer_id):
+    def get_customer_by_id(self, customer_id: str) -> Optional[CustomerDict]:
         """특정 고객 정보를 가져옵니다."""
         query = "SELECT * FROM customers WHERE customer_id = %s"
         try:
@@ -77,7 +96,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 조회 오류: {e}")
             return None
     
-    def add_customer(self, customer_data):
+    def add_customer(self, customer_data: CustomerCreateDict) -> APIResponse:
         """새 고객을 추가합니다."""
         try:
             current_time = self.format_timestamp()
@@ -118,7 +137,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 추가 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def _generate_customer_id(self):
+    def _generate_customer_id(self) -> str:
         """고객 ID 자동 생성 (기존 C001~C442 호환성 유지)"""
         try:
             # 기존 C### 형태 ID 조회
@@ -140,7 +159,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 ID 생성 오류: {e}")
             return "C001"
     
-    def update_customer(self, customer_id, customer_data):
+    def update_customer(self, customer_id: str, customer_data: CustomerUpdateDict) -> APIResponse:
         """고객 정보를 업데이트합니다."""
         try:
             current_time = self.format_timestamp()
@@ -171,7 +190,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 업데이트 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def delete_customer(self, customer_id):
+    def delete_customer(self, customer_id: str) -> APIResponse:
         """고객을 삭제합니다."""
         try:
             query = "DELETE FROM customers WHERE customer_id = %s"
@@ -181,7 +200,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 삭제 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def search_customers(self, search_term):
+    def search_customers(self, search_term: str) -> List[CustomerDict]:
         """고객 검색"""
         query = """
             SELECT * FROM customers 
@@ -202,7 +221,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"고객 검색 오류: {e}")
             return []
     
-    def get_customers_by_country(self, country):
+    def get_customers_by_country(self, country: str) -> List[CustomerDict]:
         """국가별 고객 조회"""
         query = "SELECT * FROM customers WHERE country = %s ORDER BY company_name"
         try:
@@ -211,7 +230,7 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
             logger.error(f"국가별 고객 조회 오류: {e}")
             return []
     
-    def get_customer_statistics(self):
+    def get_customer_statistics(self) -> Dict[str, Any]:
         """고객 통계 정보"""
         query = """
             SELECT 
@@ -279,7 +298,14 @@ class PostgreSQLCustomerManager(BasePostgreSQLManager):
         """
         try:
             result = self.execute_query(query, fetch_all=True)
-            return [row[0] for row in result] if result else []
+            if result:
+                # PostgreSQL manager returns list of dictionaries
+                countries = [row['country'] for row in result if row.get('country')]
+                logger.info(f"국가 목록 조회 성공: {len(countries)}개 국가")
+                return countries
+            else:
+                logger.info("국가 데이터가 없습니다")
+                return []
         except Exception as e:
             logger.error(f"국가 목록 조회 오류: {e}")
             return []
