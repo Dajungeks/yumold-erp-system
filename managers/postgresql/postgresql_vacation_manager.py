@@ -5,21 +5,22 @@ PostgreSQL Vacation 관리 매니저
 
 from .base_postgresql_manager import BasePostgreSQLManager
 from datetime import datetime
+from typing import Dict, List, Optional, Union, Any
 import uuid
+import pandas as pd
 
 class PostgreSQLVacationManager(BasePostgreSQLManager):
     """PostgreSQL Vacation 관리 매니저"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.init_tables()
     
-    def init_tables(self):
+    def init_tables(self) -> None:
         """Vacation 관련 테이블 초기화 (SQLite 호환)"""
-        connection = None
         try:
-            connection = self.get_connection()
-            cursor = self.get_cursor(connection)
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
             
             # 휴가 신청 테이블
             cursor.execute("""
@@ -105,16 +106,20 @@ class PostgreSQLVacationManager(BasePostgreSQLManager):
                 ON CONFLICT (type_id) DO NOTHING
             """)
             
-            self.return_connection(connection)
             self.log_info("Vacation 관련 테이블 초기화 완료")
+            conn.commit()
                 
         except Exception as e:
             self.log_error(f"Vacation 테이블 초기화 실패: {e}")
-            if 'connection' in locals() and connection:
-                self.return_connection(connection)
     
-    def get_vacation_summary(self, employee_id=None, year=None):
-        """휴가 요약 정보 조회 (SQLite 매니저 호환)"""
+    def get_vacation_summary(self, employee_id: Optional[str] = None, year: Optional[int] = None) -> List[Dict[str, Any]]:
+        """휴가 요약 정보 조회 (SQLite 매니저 호환)
+        
+        Returns:
+            List[Dict[str, Any]]: 휴가 요약 정보 리스트. 
+            employee_id가 지정되면 해당 직원의 단일 요약 정보를 리스트로 반환.
+            employee_id가 None이면 전체 직원들의 요약 정보 리스트 반환.
+        """
         connection = None
         try:
             connection = self.get_connection()
@@ -142,7 +147,7 @@ class PostgreSQLVacationManager(BasePostgreSQLManager):
                 
                 result = self.execute_query(query, params, fetch_one=True)
                 self.return_connection(connection)
-                return result if result else {}
+                return [result] if result else []
             else:
                 # 전체 직원 휴가 요약
                 query = '''
@@ -170,9 +175,9 @@ class PostgreSQLVacationManager(BasePostgreSQLManager):
             self.log_error(f"휴가 요약 조회 실패: {e}")
             if 'connection' in locals() and connection:
                 self.return_connection(connection)
-            return {} if employee_id else []
+            return []
     
-    def get_vacations_by_employee(self, employee_id, year=None, status=None):
+    def get_vacations_by_employee(self, employee_id: str, year: Optional[int] = None, status: Optional[str] = None) -> pd.DataFrame:
         """직원별 휴가 내역 조회 (SQLite 매니저 호환)"""
         connection = None
         try:
@@ -203,10 +208,9 @@ class PostgreSQLVacationManager(BasePostgreSQLManager):
             self.log_error(f"직원별 휴가 내역 조회 실패: {e}")
             if 'connection' in locals() and connection:
                 self.return_connection(connection)
-            import pandas as pd
             return pd.DataFrame()
     
-    def get_statistics(self):
+    def get_statistics(self) -> Dict[str, int]:
         """통계 조회"""
         connection = None
         try:
