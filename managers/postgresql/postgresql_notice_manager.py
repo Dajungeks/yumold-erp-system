@@ -106,9 +106,10 @@ class PostgreSQLNoticeManager(BasePostgreSQLManager):
         except Exception as e:
             self.log_error(f"Notice 테이블 초기화 실패: {e}")
     
-    def get_all_notices(self, status=None, category=None, limit=None):
-        """모든 공지사항 조회"""
+    def get_all_notices(self, status=None, category=None, limit=None) -> 'pd.DataFrame':
+        """모든 공지사항을 DataFrame으로 조회"""
         try:
+            import pandas as pd
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
@@ -137,14 +138,18 @@ class PostgreSQLNoticeManager(BasePostgreSQLManager):
                     notice = dict(zip(columns, row))
                     notices.append(notice)
                 
-                return notices
+                if notices:
+                    return pd.DataFrame(notices)
+                else:
+                    return pd.DataFrame()
                 
         except Exception as e:
             self.log_error(f"공지사항 조회 실패: {e}")
-            return []
+            import pandas as pd
+            return pd.DataFrame()
     
-    def get_all_items(self):
-        """모든 항목 조회 (get_all_notices 호출)"""
+    def get_all_items(self) -> 'pd.DataFrame':
+        """모든 항목을 DataFrame으로 조회 (get_all_notices 호출)"""
         return self.get_all_notices()
     
     def get_notice_by_id(self, notice_id):
@@ -201,8 +206,8 @@ class PostgreSQLNoticeManager(BasePostgreSQLManager):
             self.log_error(f"공지사항 조회 실패: {e}")
             return []
     
-    def get_all_employee_posts(self, status=None, category=None, limit=None):
-        """모든 직원 게시글 조회 (공지사항과 동일하게 처리)"""
+    def get_all_employee_posts(self, status=None, category=None, limit=None) -> 'pd.DataFrame':
+        """모든 직원 게시글을 DataFrame으로 조회 (공지사항과 동일하게 처리)"""
         return self.get_all_notices(status=status, category=category, limit=limit)
     
     def get_statistics(self):
