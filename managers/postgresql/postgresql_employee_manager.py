@@ -61,42 +61,42 @@ class PostgreSQLEmployeeManager(BasePostgreSQLManager):
         """
         self.create_table_if_not_exists(self.table_name, create_sql)
 
-        def _ensure_annual_leave_columns(self):
+    def _ensure_annual_leave_columns(self):
+        """
+        employees 테이블에 annual_leave_days 컬럼이 없으면 추가합니다.
+        """
+        try:
+            check_sql = """
+                SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = %s
             """
-            employees 테이블에 annual_leave_days 컬럼이 없으면 추가합니다.
+            exists = self.execute_query(check_sql, (self.table_name, "annual_leave_days"), fetch_one=True)
+            if not exists:
+                alter_sql = f"ALTER TABLE {self.table_name} ADD COLUMN annual_leave_days NUMERIC(5,2) DEFAULT 0"
+                self.execute_query(alter_sql)
+                logger.info("✅ annual_leave_days 컬럼이 employees 테이블에 추가되었습니다.")
+        except Exception as e:
+            logger.error(f"annual_leave_days 컬럼 보장 실패: {e}")
+    def update_annual_leave_days(self, employee_id: Union[int, str], annual_days: float) -> bool:
+        """
+        직원의 연차 총 일수를 갱신합니다.
+        :param employee_id: 직원 ID (employee_id 컬럼 값)
+        :param annual_days: 부여할 연차 일수
+        :return: 성공 여부
+        """
+        try:
+            sql = f"""
+                UPDATE {self.table_name}
+                    SET annual_leave_days = %s,
+                        updated_date = CURRENT_TIMESTAMP
+                    WHERE employee_id = %s
             """
-            try:
-                check_sql = """
-                    SELECT 1
-                      FROM information_schema.columns
-                     WHERE table_name = %s AND column_name = %s
-                """
-                exists = self.execute_query(check_sql, (self.table_name, "annual_leave_days"), fetch_one=True)
-                if not exists:
-                    alter_sql = f"ALTER TABLE {self.table_name} ADD COLUMN annual_leave_days NUMERIC(5,2) DEFAULT 0"
-                    self.execute_query(alter_sql)
-                    logger.info("✅ annual_leave_days 컬럼이 employees 테이블에 추가되었습니다.")
-            except Exception as e:
-                logger.error(f"annual_leave_days 컬럼 보장 실패: {e}")
-        def update_annual_leave_days(self, employee_id: Union[int, str], annual_days: float) -> bool:
-            """
-            직원의 연차 총 일수를 갱신합니다.
-            :param employee_id: 직원 ID (employee_id 컬럼 값)
-            :param annual_days: 부여할 연차 일수
-            :return: 성공 여부
-            """
-            try:
-                sql = f"""
-                    UPDATE {self.table_name}
-                       SET annual_leave_days = %s,
-                           updated_date = CURRENT_TIMESTAMP
-                     WHERE employee_id = %s
-                """
-                rows = self.execute_query(sql, (annual_days, str(employee_id)))
-                return rows > 0 if isinstance(rows, int) else bool(rows)
-            except Exception as e:
-                logger.error(f"연차 일수 업데이트 실패(employee_id={employee_id}, days={annual_days}): {e}")
-                return False
+            rows = self.execute_query(sql, (annual_days, str(employee_id)))
+            return rows > 0 if isinstance(rows, int) else bool(rows)
+        except Exception as e:
+            logger.error(f"연차 일수 업데이트 실패(employee_id={employee_id}, days={annual_days}): {e}")
+            return False
 
     
     def get_all_employees_list(self, limit: int = 100) -> List[EmployeeDict]:
