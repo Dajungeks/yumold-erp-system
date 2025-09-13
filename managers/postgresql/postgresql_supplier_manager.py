@@ -6,6 +6,7 @@ PostgreSQL 공급업체 관리 매니저
 from .base_postgresql_manager import BasePostgreSQLManager
 from datetime import datetime
 import uuid
+import pandas as pd
 
 class PostgreSQLSupplierManager(BasePostgreSQLManager):
     """PostgreSQL 공급업체 관리 매니저"""
@@ -96,7 +97,7 @@ class PostgreSQLSupplierManager(BasePostgreSQLManager):
             return {'success': False, 'error': str(e)}
     
     def get_all_suppliers(self):
-        """모든 공급업체 조회"""
+        """모든 공급업체 조회 - DataFrame 반환"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -106,17 +107,15 @@ class PostgreSQLSupplierManager(BasePostgreSQLManager):
                 """)
                 
                 columns = [desc[0] for desc in cursor.description]
-                suppliers = []
+                results = cursor.fetchall()
                 
-                for row in cursor.fetchall():
-                    supplier = dict(zip(columns, row))
-                    suppliers.append(supplier)
-                
-                return suppliers
+                # pandas DataFrame으로 반환
+                df = pd.DataFrame(results, columns=columns)
+                return df
                 
         except Exception as e:
             self.log_error(f"공급업체 조회 실패: {e}")
-            return []
+            return pd.DataFrame()
     
     def get_supplier_by_id(self, supplier_id):
         """공급업체 ID로 조회"""
