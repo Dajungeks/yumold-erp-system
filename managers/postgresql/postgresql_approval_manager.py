@@ -6,6 +6,7 @@ PostgreSQL 승인 관리 매니저
 from .base_postgresql_manager import BasePostgreSQLManager
 from datetime import datetime
 import uuid
+import pandas as pd
 
 class PostgreSQLApprovalManager(BasePostgreSQLManager):
     """PostgreSQL 승인 관리 매니저"""
@@ -237,6 +238,136 @@ class PostgreSQLApprovalManager(BasePostgreSQLManager):
                 'approved': 0,
                 'rejected': 0
             }
+    
+    def get_requests_by_requester(self, requester_id, status=None):
+        """요청자별 요청 내역 조회"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT request_id, request_type, title, description, 
+                           requester_id, requester_name, approver_id, approver_name,
+                           amount, currency, status, priority,
+                           requested_date as request_date, approved_date, rejected_date,
+                           approval_notes, related_document_id,
+                           created_date, updated_date
+                    FROM approval_requests 
+                    WHERE requester_id = %s
+                '''
+                params = [requester_id]
+                
+                if status:
+                    query += " AND status = %s"
+                    params.append(status)
+                
+                query += " ORDER BY requested_date DESC"
+                
+                cursor.execute(query, params)
+                columns = [desc[0] for desc in cursor.description]
+                results = cursor.fetchall()
+                
+                df = pd.DataFrame(results, columns=columns)
+                return df
+                
+        except Exception as e:
+            self.log_error(f"요청자별 요청 내역 조회 실패 (SQL 오류): {str(e)}")
+            return pd.DataFrame()
+    
+    def get_all_approvals(self):
+        """모든 승인 요청 내역 조회"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT 
+                        request_id as approval_id,
+                        request_type,
+                        title,
+                        description,
+                        requester_id,
+                        requester_name,
+                        approver_id,
+                        approver_name,
+                        amount,
+                        currency,
+                        status,
+                        priority,
+                        requested_date as request_date,
+                        approved_date as approval_date,
+                        rejected_date,
+                        approval_notes as reason,
+                        CASE 
+                            WHEN status = 'rejected' THEN approval_notes
+                            ELSE NULL
+                        END as rejection_reason,
+                        related_document_id,
+                        created_date,
+                        updated_date
+                    FROM approval_requests 
+                    ORDER BY requested_date DESC
+                """)
+                
+                columns = [desc[0] for desc in cursor.description]
+                results = cursor.fetchall()
+                
+                # 딕셔너리 리스트로 반환
+                approval_list = []
+                for row in results:
+                    approval_dict = dict(zip(columns, row))
+                    approval_list.append(approval_dict)
+                
+                return approval_list
+                
+        except Exception as e:
+            self.log_error(f"전체 승인 내역 조회 실패: {e}")
+            return []
+    
+    def get_approvals_by_requester(self, requester_id):
+        """특정 요청자의 승인 내역 조회"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT 
+                        request_id as approval_id,
+                        request_type,
+                        title,
+                        description,
+                        requester_id,
+                        requester_name,
+                        approver_id,
+                        approver_name,
+                        amount,
+                        currency,
+                        status,
+                        priority,
+                        requested_date as request_date,
+                        approved_date as approval_date,
+                        rejected_date,
+                        approval_notes as reason,
+                        CASE 
+                            WHEN status = 'rejected' THEN approval_notes
+                            ELSE NULL
+                        END as rejection_reason,
+                        related_document_id,
+                        created_date,
+                        updated_date
+                    FROM approval_requests 
+                    WHERE requester_id = %s
+                    ORDER BY requested_date DESC
+                """, (requester_id,))
+                
+                columns = [desc[0] for desc in cursor.description]
+                results = cursor.fetchall()
+                
+                # pandas DataFrame으로 반환 (UI에서 DataFrame 연산을 사용함)
+                df = pd.DataFrame(results, columns=columns)
+                return df
+                
+        except Exception as e:
+            self.log_error(f"요청자별 승인 내역 조회 실패: {e}")
+            return pd.DataFrame()
     
     def _generate_request_id(self):
         """요청 ID 생성"""
