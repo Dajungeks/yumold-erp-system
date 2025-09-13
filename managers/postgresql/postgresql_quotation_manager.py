@@ -6,7 +6,18 @@ PostgreSQL 기반 견적서 관리 시스템
 import pandas as pd
 from datetime import datetime
 import logging
+from typing import List, Optional, Union, Dict, Any
 from .base_postgresql_manager import BasePostgreSQLManager
+from schemas.quotation_types import (
+    QuotationDict,
+    QuotationCreateDict,
+    QuotationUpdateDict,
+    QuotationItemDict,
+    QuotationItemCreateDict,
+    QuotationItemUpdateDict,
+    QuotationSearchDict
+)
+from schemas.base_types import APIResponse, SuccessResponse, ErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +88,8 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
         self.create_table_if_not_exists(self.quotations_table, quotations_sql)
         self.create_table_if_not_exists(self.items_table, items_sql)
     
-    def get_all_quotations(self):
-        """모든 견적서 정보를 가져옵니다."""
+    def get_all_quotations(self) -> pd.DataFrame:
+        """모든 견적서 정보를 DataFrame으로 가져옵니다."""
         query = """
             SELECT quotation_id, customer_id, quotation_number, quotation_date,
                    delivery_date, currency, exchange_rate, total_amount, status,
@@ -88,21 +99,20 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             ORDER BY created_date DESC
         """
         try:
-            return self.execute_query(query, fetch_all=True)
+            result = self.execute_query(query, fetch_all=True)
+            if result:
+                return pd.DataFrame(result)
+            else:
+                return pd.DataFrame()
         except Exception as e:
             logger.error(f"견적서 목록 조회 오류: {e}")
-            return []
-    
-    def get_quotations_dataframe(self):
-        """견적서 정보를 DataFrame으로 가져옵니다."""
-        try:
-            quotations_list = self.get_all_quotations()
-            return pd.DataFrame(quotations_list)
-        except Exception as e:
-            logger.error(f"견적서 DataFrame 조회 오류: {e}")
             return pd.DataFrame()
     
-    def get_quotation_by_id(self, quotation_id):
+    def get_quotations_dataframe(self) -> pd.DataFrame:
+        """견적서 정보를 DataFrame으로 가져옵니다. (기존 호환성 유지)"""
+        return self.get_all_quotations()
+    
+    def get_quotation_by_id(self, quotation_id: str) -> Optional[QuotationDict]:
         """특정 견적서 정보를 가져옵니다."""
         query = "SELECT * FROM quotations WHERE quotation_id = %s"
         try:
@@ -111,20 +121,24 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 조회 오류: {e}")
             return None
     
-    def get_quotation_items(self, quotation_id):
-        """견적서의 모든 아이템을 가져옵니다."""
+    def get_quotation_items(self, quotation_id: str) -> pd.DataFrame:
+        """견적서의 모든 아이템을 DataFrame으로 가져옵니다."""
         query = """
             SELECT * FROM quotation_items 
             WHERE quotation_id = %s 
             ORDER BY item_number
         """
         try:
-            return self.execute_query(query, (quotation_id,), fetch_all=True)
+            result = self.execute_query(query, (quotation_id,), fetch_all=True)
+            if result:
+                return pd.DataFrame(result)
+            else:
+                return pd.DataFrame()
         except Exception as e:
             logger.error(f"견적서 아이템 조회 오류: {e}")
-            return []
+            return pd.DataFrame()
     
-    def add_quotation(self, quotation_data, items_data=None):
+    def add_quotation(self, quotation_data: QuotationCreateDict, items_data: Optional[List[QuotationItemCreateDict]] = None) -> APIResponse:
         """새 견적서를 추가합니다."""
         try:
             current_time = self.format_timestamp()
@@ -196,7 +210,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 추가 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def _add_quotation_items(self, quotation_id, items_data):
+    def _add_quotation_items(self, quotation_id: str, items_data: List[QuotationItemCreateDict]) -> None:
         """견적서 아이템들을 추가합니다."""
         items_query = """
             INSERT INTO quotation_items (
@@ -231,7 +245,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
         if batch_data:
             self.execute_many(items_query, batch_data)
     
-    def _generate_quotation_id(self):
+    def _generate_quotation_id(self) -> str:
         """견적서 ID 자동 생성"""
         query = """
             SELECT quotation_id FROM quotations 
@@ -250,7 +264,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 ID 생성 오류: {e}")
             return "QUO000001"
     
-    def _generate_quotation_number(self):
+    def _generate_quotation_number(self) -> str:
         """견적서 번호 생성 (YYYY-MM-NNNN 형식)"""
         today = datetime.now()
         year_month = today.strftime("%Y-%m")
@@ -273,7 +287,11 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 번호 생성 오류: {e}")
             return f"{year_month}-0001"
     
-    def update_quotation(self, quotation_id, quotation_data, items_data=None):
+    def generate_quotation_number(self) -> str:
+        """견적서 번호 생성 (공개 메서드)"""
+        return self._generate_quotation_number()
+    
+    def update_quotation(self, quotation_id: str, quotation_data: QuotationUpdateDict, items_data: Optional[List[QuotationItemCreateDict]] = None) -> APIResponse:
         """견적서 정보를 업데이트합니다."""
         try:
             current_time = self.format_timestamp()
@@ -313,7 +331,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 업데이트 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def delete_quotation(self, quotation_id):
+    def delete_quotation(self, quotation_id: str) -> APIResponse:
         """견적서를 삭제합니다."""
         try:
             # 아이템 먼저 삭제 (외래키 제약조건)
@@ -333,7 +351,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 삭제 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def search_quotations(self, search_term):
+    def search_quotations(self, search_term: str) -> List[QuotationDict]:
         """견적서 검색"""
         query = """
             SELECT * FROM quotations 
@@ -354,7 +372,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 검색 오류: {e}")
             return []
     
-    def get_quotations_by_customer(self, customer_id):
+    def get_quotations_by_customer(self, customer_id: str) -> List[QuotationDict]:
         """고객별 견적서 조회"""
         query = "SELECT * FROM quotations WHERE customer_id = %s ORDER BY created_date DESC"
         try:
@@ -363,7 +381,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"고객별 견적서 조회 오류: {e}")
             return []
     
-    def get_quotation_statistics(self):
+    def get_quotation_statistics(self) -> Dict[str, Any]:
         """견적서 통계 정보"""
         query = """
             SELECT 
@@ -382,7 +400,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 통계 조회 오류: {e}")
             return {}
     
-    def create_revision(self, original_quotation_id, revision_data=None):
+    def create_revision(self, original_quotation_id: str, revision_data: Optional[QuotationUpdateDict] = None) -> APIResponse:
         """견적서 리비전 생성"""
         try:
             # 원본 견적서 조회
@@ -411,7 +429,7 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
             logger.error(f"견적서 리비전 생성 오류: {e}")
             return {'success': False, 'error': str(e)}
     
-    def get_quotation_with_items(self, quotation_id):
+    def get_quotation_with_items(self, quotation_id: str) -> Optional[Dict[str, Any]]:
         """견적서와 아이템을 함께 조회"""
         try:
             quotation = self.get_quotation_by_id(quotation_id)
@@ -422,3 +440,121 @@ class PostgreSQLQuotationManager(BasePostgreSQLManager):
         except Exception as e:
             logger.error(f"견적서 전체 조회 오류: {e}")
             return None
+    
+    def save_quotation(self, quotation_data: Dict[str, Any]) -> Dict[str, Any]:
+        """견적서 저장 (자동으로 신규/업데이트 판별)"""
+        try:
+            quotation_id = quotation_data.get('quotation_id')
+            
+            # quotation_id가 있으면 기존 견적서인지 확인
+            if quotation_id:
+                existing = self.get_quotation_by_id(quotation_id)
+                if existing:
+                    # 업데이트 처리
+                    result = self.update_quotation(quotation_id, quotation_data)
+                    if result.get('success', False):
+                        # 업데이트 성공시 최신 견적서 정보를 다시 조회해서 현재 quotation_number 반환
+                        updated_quotation = self.get_quotation_by_id(quotation_id)
+                        if updated_quotation:
+                            quotation_number = updated_quotation.get('quotation_number', '')
+                        else:
+                            # 업데이트된 견적서를 찾을 수 없는 경우 (예상치 못한 오류)
+                            logger.error(f"업데이트된 견적서를 찾을 수 없습니다: {quotation_id}")
+                            quotation_number = existing.get('quotation_number', '')
+                        
+                        return {
+                            'success': True,
+                            'quotation_id': quotation_id,
+                            'quotation_number': quotation_number,
+                            'created': False  # 업데이트임을 표시
+                        }
+                    else:
+                        return result  # 오류 정보 그대로 반환
+            
+            # 신규 견적서 생성
+            result = self.add_quotation(quotation_data)
+            if result.get('success', False):
+                return {
+                    'success': True,
+                    'quotation_id': result.get('quotation_id'),
+                    'quotation_number': result.get('quotation_number'),
+                    'created': True  # 신규 생성임을 표시
+                }
+            else:
+                return result  # 오류 정보 그대로 반환
+            
+        except Exception as e:
+            logger.error(f"견적서 저장 오류: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def save_quotation_item(self, item_data: Dict[str, Any]) -> Dict[str, Any]:
+        """견적서 아이템 개별 저장"""
+        try:
+            quotation_id = item_data.get('quotation_id')
+            if not quotation_id:
+                logger.error("견적서 ID가 필요합니다")
+                return {'success': False, 'error': '견적서 ID가 필요합니다'}
+            
+            # 기존 아이템 번호 확인 (가장 큰 번호 + 1)
+            item_number_query = """
+                SELECT COALESCE(MAX(item_number), 0) + 1 as next_number
+                FROM quotation_items 
+                WHERE quotation_id = %s
+            """
+            result = self.execute_query(item_number_query, (quotation_id,), fetch_one=True)
+            next_item_number = result['next_number'] if result else 1
+            
+            # 아이템 데이터 준비
+            current_time = self.format_timestamp()
+            
+            # RETURNING 구문 추가해서 새로 생성된 item의 id를 받아옴
+            items_query = """
+                INSERT INTO quotation_items (
+                    quotation_id, item_number, product_name, product_code,
+                    specification, quantity, unit_price, total_price, unit,
+                    lead_time, notes, created_date, updated_date
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING id
+            """
+            
+            # 가격 계산 (quantity * unit_price)
+            quantity = item_data.get('quantity', 1) or 1
+            unit_price = item_data.get('unit_price', 0) or 0
+            total_price = item_data.get('total_price') or (quantity * unit_price)
+            
+            item_params = (
+                quotation_id,
+                next_item_number,
+                item_data.get('product_name', ''),
+                item_data.get('product_code', ''),
+                item_data.get('specification', ''),
+                quantity,
+                unit_price,
+                total_price,
+                item_data.get('unit', 'PCS'),
+                item_data.get('lead_time', ''),
+                item_data.get('notes', ''),
+                current_time,
+                current_time
+            )
+            
+            # 새로 생성된 item_id를 받아옴
+            new_item = self.execute_query(items_query, item_params, fetch_one=True)
+            item_id = new_item['id'] if new_item else None
+            
+            if item_id:
+                logger.info(f"견적서 아이템 저장 완료: {quotation_id} - {item_data.get('product_name')} (item_id: {item_id})")
+                return {
+                    'success': True,
+                    'item_id': item_id,
+                    'item_number': next_item_number,
+                    'quotation_id': quotation_id
+                }
+            else:
+                logger.error(f"견적서 아이템 저장 실패: item_id를 받지 못함")
+                return {'success': False, 'error': 'item_id를 받지 못함'}
+            
+        except Exception as e:
+            logger.error(f"견적서 아이템 저장 오류: {e}")
+            return {'success': False, 'error': str(e)}
