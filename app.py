@@ -544,7 +544,7 @@ def show_login_page(lang_dict):
     
     if login_type == employee_login_text:
         st.subheader(f"👤 {employee_login_text}")
-        
+    
         with st.form("employee_login_form"):
             user_id_text = get_text("employee_id", lang_dict)
             password_text = get_text("password", lang_dict)
@@ -556,36 +556,138 @@ def show_login_page(lang_dict):
             
         if login_submitted:
             if user_id and password:
-                # 직원 인증 로직 (튜플 반환 처리)
-                auth_result = st.session_state.auth_manager.authenticate_employee(user_id, password)
+                # PostgreSQL 직접 연결로 변경
+                import psycopg2
+                from datetime import datetime
                 
-                if isinstance(auth_result, tuple) and auth_result[0]:
-                    success, employee_info = auth_result
+                try:
+                    conn = psycopg2.connect(
+                        host=st.secrets["postgres"]["host"],
+                        port=st.secrets["postgres"]["port"],
+                        database=st.secrets["postgres"]["database"],
+                        user=st.secrets["postgres"]["user"],
+                        password=st.secrets["postgres"]["password"]
+                    )
+                    cursor = conn.cursor()
                     
-                    st.session_state.logged_in = True
-                    st.session_state.user_id = user_id
-                    st.session_state.user_type = employee_info.get('user_type', 'employee')
-                    st.session_state.login_type = "employee"
+                    # 1. 계정 잠금 확인
+                    cursor.execute("""
+                        SELECT account_locked_until, login_attempts 
+                        FROM employees 
+                        WHERE employee_id = %s
+                    """, (user_id,))
                     
-                    # 권한 정보 설정
-                    st.session_state.access_level = employee_info.get('access_level', 'user')
-                    st.session_state.user_name = employee_info.get('name', user_id)
-                    st.session_state.user_position = employee_info.get('position', '')
-                    st.session_state.user_department = employee_info.get('department', '')
+                    lock_result = cursor.fetchone()
+                    if lock_result and lock_result[0]:
+                        if datetime.now() < lock_result[0]:
+                            remaining = int((lock_result[0] - datetime.now()).seconds / 60) + 1
+                            st.error(f"🔒 계정이 잠겼습니다. {remaining}분 후 다시 시도하세요.")
+                            cursor.close()
+                            conn.close()
+                            return
                     
-                    # 법인장인 경우 특별 처리
-                    if st.session_state.user_position == '법인장' or st.session_state.access_level == 'master':
-                        st.session_state.user_type = 'master'
-                        st.session_state.access_level = 'master'
+                    # 2. 비밀번호 확인
+                    cursor.execute("""
+                        SELECT employee_id, name, position, department, access_level, 
+                            password, password_change_required
+                        FROM employees 
+                        WHERE employee_id = %s
+                    """, (user_id,))
                     
-                    success_msg = get_text("login_success", lang_dict) if 'login_success' in lang_dict else f"로그인 성공! 권한: {st.session_state.access_level}"
-                    info_msg = get_text("login_complete", lang_dict) if 'login_complete' in lang_dict else "로그인이 완료되었습니다."
-                    st.success(success_msg)
-                    st.info(info_msg)
-                    st.rerun()
-                else:
-                    error_msg = get_text("login_failed", lang_dict)
-                    st.error(error_msg)
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        # 비밀번호 검증 (NULL이면 1111, 아니면 입력값과 비교)
+                        password_valid = False
+                        if result[5] is None and password == "1111":
+                            password_valid = True
+                            need_change = True  # 기본 비밀번호면 변경 필요
+                        elif result[5] == password:
+                            password_valid = True
+                            need_change = result[6] if result[6] is not None else False
+                        
+                        if password_valid:
+                            # 로그인 성공 - 시도 횟수 초기화
+                            cursor.execute("""
+                                UPDATE employees 
+                                SET login_attempts = 0,
+                                    account_locked_until = NULL
+                                WHERE employee_id = %s
+                            """, (user_id,))
+                            conn.commit()
+                            
+                            # 세션 설정 (기존 코드 유지)
+                            st.session_state.logged_in = True
+                            st.session_state.user_id = user_id
+                            st.session_state.user_type = 'employee'
+                            st.session_state.login_type = "employee"
+                            st.session_state.access_level = result[4] or 'user'
+                            st.session_state.user_name = result[1] or user_id
+                            st.session_state.user_position = result[2] or ''
+                            st.session_state.user_department = result[3] or ''
+                            
+                            # 비밀번호 변경 필요 여부
+                            st.session_state.password_change_required = need_change
+                            
+                            # 법인장인 경우 특별 처리
+                            if st.session_state.user_position == '법인장' or st.session_state.access_level == 'master':
+                                st.session_state.user_type = 'master'
+                                st.session_state.access_level = 'master'
+                            
+                            success_msg = get_text("login_success", lang_dict) if 'login_success' in lang_dict else f"로그인 성공! 권한: {st.session_state.access_level}"
+                            info_msg = get_text("login_complete", lang_dict) if 'login_complete' in lang_dict else "로그인이 완료되었습니다."
+                            st.success(success_msg)
+                            
+                            # 비밀번호 변경 필요시 경고
+                            if need_change:
+                                st.warning("⚠️ 보안을 위해 비밀번호를 변경해주세요.")
+                            
+                            st.info(info_msg)
+                            cursor.close()
+                            conn.close()
+                            st.rerun()
+                        else:
+                            # 로그인 실패 - 시도 횟수 증가
+                            cursor.execute("""
+                                UPDATE employees 
+                                SET login_attempts = COALESCE(login_attempts, 0) + 1,
+                                    account_locked_until = CASE 
+                                        WHEN COALESCE(login_attempts, 0) + 1 >= 5 
+                                        THEN NOW() + INTERVAL '5 minutes'
+                                        ELSE account_locked_until
+                                    END
+                                WHERE employee_id = %s
+                            """, (user_id,))
+                            conn.commit()
+                            
+                            # 남은 시도 횟수 확인
+                            cursor.execute("SELECT login_attempts FROM employees WHERE employee_id = %s", (user_id,))
+                            attempts_result = cursor.fetchone()
+                            
+                            if attempts_result:
+                                attempts = attempts_result[0] or 0
+                                remaining = 5 - attempts
+                                if remaining > 0:
+                                    error_msg = get_text("login_failed", lang_dict) if 'login_failed' in lang_dict else f"로그인 실패 (남은 시도: {remaining}회)"
+                                else:
+                                    error_msg = "계정이 잠겼습니다. 5분 후 다시 시도하세요."
+                            else:
+                                error_msg = get_text("login_failed", lang_dict)
+                            
+                            st.error(error_msg)
+                            cursor.close()
+                            conn.close()
+                    else:
+                        # 사용자 없음
+                        error_msg = get_text("login_failed", lang_dict) if 'login_failed' in lang_dict else "사용자를 찾을 수 없습니다."
+                        st.error(error_msg)
+                        cursor.close()
+                        conn.close()
+                        
+                except Exception as e:
+                    st.error(f"로그인 처리 중 오류: {e}")
+                    if 'conn' in locals():
+                        conn.close()
             else:
                 warning_msg = get_text("input_credentials", lang_dict)
                 st.warning(warning_msg)
