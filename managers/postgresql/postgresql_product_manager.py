@@ -6,6 +6,15 @@ PostgreSQL 제품 관리 매니저
 from .base_postgresql_manager import BasePostgreSQLManager
 from datetime import datetime
 import uuid
+import pandas as pd
+from typing import List, Optional, Union, Dict, Any
+from schemas.product_types import (
+    ProductDict,
+    ProductCreateDict,
+    ProductUpdateDict,
+    ProductSearchDict
+)
+from schemas.base_types import APIResponse, SuccessResponse, ErrorResponse
 
 class PostgreSQLProductManager(BasePostgreSQLManager):
     """PostgreSQL 제품 관리 매니저"""
@@ -38,13 +47,13 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                     )
                 """)
                 
-                print("제품 테이블 초기화 완료")
+                self.log_info("제품 테이블 초기화 완료")
                 conn.commit()
                 
         except Exception as e:
-            print(f"제품 테이블 초기화 실패: {e}")
+            self.log_error(f"제품 테이블 초기화 실패: {e}")
     
-    def add_product(self, product_data):
+    def add_product(self, product_data: ProductCreateDict) -> APIResponse:
         """제품 추가"""
         try:
             with self.get_connection() as conn:
@@ -81,12 +90,13 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                 }
                 
         except Exception as e:
-            print(f"제품 추가 실패: {e}")
+            self.log_error(f"제품 추가 실패 (SQL 오류): {e}")
             return {'success': False, 'error': str(e)}
     
-    def get_all_products(self):
-        """모든 제품 조회"""
+    def get_all_products(self) -> pd.DataFrame:
+        """모든 제품을 DataFrame으로 조회"""
         try:
+            import pandas as pd
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
@@ -101,13 +111,16 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                     product = dict(zip(columns, row))
                     products.append(product)
                 
-                return products
+                if products:
+                    return pd.DataFrame(products)
+                else:
+                    return pd.DataFrame()
                 
         except Exception as e:
-            print(f"제품 조회 실패: {e}")
-            return []
+            self.log_error(f"제품 조회 실패 (SQL 오류): {e}")
+            return pd.DataFrame()
     
-    def get_product_by_id(self, product_id):
+    def get_product_by_id(self, product_id: str) -> Optional[ProductDict]:
         """제품 ID로 조회"""
         try:
             with self.get_connection() as conn:
@@ -123,10 +136,10 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                 return None
                 
         except Exception as e:
-            print(f"제품 조회 실패: {e}")
+            self.log_error(f"제품 조회 실패 (SQL 오류): {e}")
             return None
     
-    def update_product(self, product_id, product_data):
+    def update_product(self, product_id: str, product_data: ProductUpdateDict) -> APIResponse:
         """제품 정보 수정"""
         try:
             with self.get_connection() as conn:
@@ -160,10 +173,10 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                 return {'success': True}
                 
         except Exception as e:
-            print(f"제품 수정 실패: {e}")
+            self.log_error(f"제품 수정 실패 (SQL 오류): {e}")
             return {'success': False, 'error': str(e)}
     
-    def delete_product(self, product_id):
+    def delete_product(self, product_id: str) -> APIResponse:
         """제품 삭제"""
         try:
             with self.get_connection() as conn:
@@ -173,10 +186,10 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                 return {'success': True}
                 
         except Exception as e:
-            print(f"제품 삭제 실패: {e}")
+            self.log_error(f"제품 삭제 실패 (SQL 오류): {e}")
             return {'success': False, 'error': str(e)}
     
-    def get_product_statistics(self):
+    def get_product_statistics(self) -> Dict[str, Any]:
         """제품 통계 조회"""
         try:
             with self.get_connection() as conn:
@@ -206,14 +219,14 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                 }
                 
         except Exception as e:
-            print(f"제품 통계 조회 실패: {e}")
+            self.log_error(f"제품 통계 조회 실패 (SQL 오류): {e}")
             return {
                 'total_products': 0,
                 'active_products': 0,
                 'categories': {}
             }
     
-    def _generate_product_id(self):
+    def _generate_product_id(self) -> str:
         """제품 ID 생성"""
         try:
             with self.get_connection() as conn:
@@ -233,7 +246,7 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                     return "PRD000001"
                     
         except Exception as e:
-            print(f"제품 ID 생성 오류: {e}")
+            self.log_error(f"제품 ID 생성 오류 (SQL 오류): {e}")
             return f"PRD{str(uuid.uuid4())[:6].upper()}"
     
     def search_products(self, search_term):
@@ -259,5 +272,5 @@ class PostgreSQLProductManager(BasePostgreSQLManager):
                 return products
                 
         except Exception as e:
-            print(f"제품 검색 실패: {e}")
+            self.log_error(f"제품 검색 실패 (SQL 오류): {e}")
             return []
