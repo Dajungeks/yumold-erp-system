@@ -74,8 +74,8 @@ class PostgreSQLOrderManager(BasePostgreSQLManager):
         self.create_table_if_not_exists(self.orders_table, orders_sql)
         self.create_table_if_not_exists(self.items_table, items_sql)
     
-    def get_all_orders(self):
-        """모든 주문 정보를 가져옵니다."""
+    def get_all_orders(self) -> pd.DataFrame:
+        """모든 주문 정보를 DataFrame으로 가져옵니다."""
         query = """
             SELECT order_id, quotation_id, customer_id, order_number, order_date,
                    delivery_date, currency, exchange_rate, total_amount, status,
@@ -85,19 +85,18 @@ class PostgreSQLOrderManager(BasePostgreSQLManager):
             ORDER BY created_date DESC
         """
         try:
-            return self.execute_query(query, fetch_all=True)
+            result = self.execute_query(query, fetch_all=True)
+            if result:
+                return pd.DataFrame(result)
+            else:
+                return pd.DataFrame()
         except Exception as e:
             logger.error(f"주문 목록 조회 오류: {e}")
-            return []
-    
-    def get_orders_dataframe(self):
-        """주문 정보를 DataFrame으로 가져옵니다."""
-        try:
-            orders_list = self.get_all_orders()
-            return pd.DataFrame(orders_list)
-        except Exception as e:
-            logger.error(f"주문 DataFrame 조회 오류: {e}")
             return pd.DataFrame()
+    
+    def get_orders_dataframe(self) -> pd.DataFrame:
+        """주문 정보를 DataFrame으로 가져옵니다. (기존 호환성 유지)"""
+        return self.get_all_orders()
     
     def get_order_by_id(self, order_id):
         """특정 주문 정보를 가져옵니다."""
@@ -108,18 +107,22 @@ class PostgreSQLOrderManager(BasePostgreSQLManager):
             logger.error(f"주문 조회 오류: {e}")
             return None
     
-    def get_order_items(self, order_id):
-        """주문의 모든 아이템을 가져옵니다."""
+    def get_order_items(self, order_id) -> pd.DataFrame:
+        """주문의 모든 아이템을 DataFrame으로 가져옵니다."""
         query = """
             SELECT * FROM order_items 
             WHERE order_id = %s 
             ORDER BY item_number
         """
         try:
-            return self.execute_query(query, (order_id,), fetch_all=True)
+            result = self.execute_query(query, (order_id,), fetch_all=True)
+            if result:
+                return pd.DataFrame(result)
+            else:
+                return pd.DataFrame()
         except Exception as e:
             logger.error(f"주문 아이템 조회 오류: {e}")
-            return []
+            return pd.DataFrame()
     
     def add_order(self, order_data, items_data=None):
         """새 주문을 추가합니다."""
