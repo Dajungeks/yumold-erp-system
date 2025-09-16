@@ -289,67 +289,12 @@ def show_expense_request_form_multi_items(expense_manager, current_user_id, curr
                 }
                 
                 # 다중 항목 요청서 저장
-                # PostgreSQL 직접 저장으로 변경
-                import psycopg2
-                from datetime import datetime
-
-                try:
-                    conn = psycopg2.connect(
-                        host=st.secrets["postgres"]["host"],
-                        port=st.secrets["postgres"]["port"],
-                        database=st.secrets["postgres"]["database"],
-                        user=st.secrets["postgres"]["user"],
-                        password=st.secrets["postgres"]["password"]
-                    )
-                    cursor = conn.cursor()
-                    
-                    # 요청번호 생성
-                    request_number = f"EXP{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                    
-                    # 메인 요청서 저장
-                    cursor.execute("""
-                        INSERT INTO expense_requests (
-                            request_number, employee_id, employee_name,
-                            request_date, total_amount,
-                            currency, purpose, status
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                    """, (
-                        request_number,
-                        current_user_id,
-                        current_user_name,
-                        request_data['request_date'],
-                        total_amount,
-                        currency,
-                        expense_title + ' - ' + expense_description,
-                        'pending'
-                    ))
-                    
-                    request_id = cursor.fetchone()[0]
-                    
-                    # 각 항목 저장
-                    for item in valid_items:
-                        cursor.execute("""
-                            INSERT INTO expense_items (
-                                request_id, item_name, quantity,
-                                unit_price, total_price, memo
-                            ) VALUES (%s, %s, %s, %s, %s, %s)
-                        """, (
-                            request_id,
-                            item['item_description'],
-                            1,
-                            item['item_amount'],
-                            item['item_amount'],
-                            item.get('item_notes', '')
-                        ))
-                    
-                    conn.commit()
-                    cursor.close()
-                    conn.close()
-                    
-                    # 성공 메시지
+                request_id = expense_manager.add_expense_request_with_items(request_data, valid_items)
+                
+                if request_id:
+                    # 성공 메시지 표시
                     st.success(f"✅ 지출요청서가 성공적으로 제출되었습니다!")
-                    st.info(f"📋 요청서 번호: {request_number}")
+                    st.info(f"📋 요청서 번호: {request_id}")
                     st.info(f"💰 총 금액: {total_amount:,.0f} {currency}")
                     st.info(f"📦 총 항목 수: {len(valid_items)}개")
                     
@@ -365,7 +310,7 @@ def show_expense_request_form_multi_items(expense_manager, current_user_id, curr
                                 st.write(f"   - 메모: {item['item_notes']}")
                             st.divider()
                     
-                    # 세션 스테이트 초기화
+                    # 세션 스테이트 완전 초기화 (새로운 요청서 작성 준비)
                     st.session_state.expense_items = [{
                         'item_description': '',
                         'item_category': '교통비',
@@ -386,188 +331,191 @@ def show_expense_request_form_multi_items(expense_manager, current_user_id, curr
                     
                     st.info("🔄 새로운 지출요청서 작성을 위해 폼이 초기화되었습니다.")
                     
-                except Exception as e:
-                    st.error(f"❌ 지출요청서 제출 중 오류가 발생했습니다: {str(e)}")
+                else:
+                    st.error("❌ 지출요청서 제출 중 오류가 발생했습니다.")
+                    
+            except Exception as e:
+                st.error(f"❌ 오류 발생: {str(e)}")
 
-    def show_expense_request_form_admin_backup(expense_manager, current_user_id, current_user_name, get_text):
-        """총무용 지출요청서 작성 폼"""
-        st.header(f"📝 {get_text('expense_request_form')}")
+def show_expense_request_form_admin_backup(expense_manager, current_user_id, current_user_name, get_text):
+    """총무용 지출요청서 작성 폼"""
+    st.header(f"📝 {get_text('expense_request_form')}")
+    
+    st.info(f"💡 {get_text('auto_approval_info')}")
+    
+    with st.form("expense_request_form_admin", clear_on_submit=True):
+        col1, col2 = st.columns(2)
         
-        st.info(f"💡 {get_text('auto_approval_info')}")
-        
-        with st.form("expense_request_form_admin", clear_on_submit=True):
-            col1, col2 = st.columns(2)
+        with col1:
+            st.subheader(get_text('basic_information'))
             
-            with col1:
-                st.subheader(get_text('basic_information'))
-                
-                # 동적 지출 유형 목록
-                expense_types_list = [
-                    get_text('expense_types.transportation'),
-                    get_text('expense_types.accommodation'),
-                    get_text('expense_types.meal'),
-                    get_text('expense_types.meeting'),
-                    get_text('expense_types.office_supplies'),
-                    get_text('expense_types.communication'),
-                    get_text('expense_types.other')
-                ]
-                
-                expense_type = st.selectbox(
-                    f"{get_text('expense_type')}*", 
-                    expense_types_list,
-                    help=get_text('select_expense_type')
-                )
-                
-                amount = st.number_input(
-                    f"{get_text('expense_amount_vnd')}*", 
-                    min_value=0,
-                    step=1000,
-                    format="%d",
-                    help=get_text('enter_expense_amount')
-                )
-                
-                expense_date = st.date_input(
-                    f"{get_text('expense_date')}*",
-                    value=datetime.now().date(),
-                    help=get_text('select_expense_date')
-                )
+            # 동적 지출 유형 목록
+            expense_types_list = [
+                get_text('expense_types.transportation'),
+                get_text('expense_types.accommodation'),
+                get_text('expense_types.meal'),
+                get_text('expense_types.meeting'),
+                get_text('expense_types.office_supplies'),
+                get_text('expense_types.communication'),
+                get_text('expense_types.other')
+            ]
             
-            with col2:
-                st.subheader(get_text('detailed_information'))
-                
-                purpose = st.text_area(
-                    f"{get_text('expense_purpose')}*",
-                    placeholder=get_text('enter_purpose'),
-                    height=100
-                )
-                
-                vendor = st.text_input(
-                    get_text('vendor_name'),
-                    placeholder=get_text('vendor_placeholder')
-                )
-                
-                priority_options = [
-                    get_text('priority_normal'),
-                    get_text('priority_urgent'), 
-                    get_text('priority_high')
-                ]
-                
-                priority = st.selectbox(
-                    get_text('priority'),
-                    priority_options,
-                    help=get_text('select_priority')
-                )
-            
-            st.subheader(get_text('attachments_memo'))
-            
-            # 파일 업로드 기능 (key를 사용해서 초기화 가능하게 함)
-            if 'file_uploader_key' not in st.session_state:
-                st.session_state.file_uploader_key = 0
-            
-            uploaded_files = st.file_uploader(
-                get_text('file_upload'),
-                accept_multiple_files=True,
-                type=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'],
-                help=get_text('file_upload_help'),
-                key=f"file_upload_{st.session_state.file_uploader_key}"
+            expense_type = st.selectbox(
+                f"{get_text('expense_type')}*", 
+                expense_types_list,
+                help=get_text('select_expense_type')
             )
             
-            # 업로드된 파일 목록 표시
-            attachment_info = ""
-            if uploaded_files:
-                st.write(f"{get_text('uploaded_files')}")
-                for file in uploaded_files:
-                    st.write(f"- {file.name} ({file.size:,} bytes)")
-                    attachment_info += f"{file.name}({file.size:,}bytes); "
-            
-            additional_notes = st.text_area(
-                get_text('additional_notes'),
-                placeholder=get_text('additional_notes_placeholder'),
-                height=60
+            amount = st.number_input(
+                f"{get_text('expense_amount_vnd')}*", 
+                min_value=0,
+                step=1000,
+                format="%d",
+                help=get_text('enter_expense_amount')
             )
             
-            submitted = st.form_submit_button(f"📤 {get_text('submit_request')}", type="primary", use_container_width=True)
+            expense_date = st.date_input(
+                f"{get_text('expense_date')}*",
+                value=datetime.now().date(),
+                help=get_text('select_expense_date')
+            )
+        
+        with col2:
+            st.subheader(get_text('detailed_information'))
             
-            if submitted:
-                if not expense_type or not amount or not purpose:
-                    st.error(f"❌ {get_text('required_fields_error')}")
+            purpose = st.text_area(
+                f"{get_text('expense_purpose')}*",
+                placeholder=get_text('enter_purpose'),
+                height=100
+            )
+            
+            vendor = st.text_input(
+                get_text('vendor_name'),
+                placeholder=get_text('vendor_placeholder')
+            )
+            
+            priority_options = [
+                get_text('priority_normal'),
+                get_text('priority_urgent'), 
+                get_text('priority_high')
+            ]
+            
+            priority = st.selectbox(
+                get_text('priority'),
+                priority_options,
+                help=get_text('select_priority')
+            )
+        
+        st.subheader(get_text('attachments_memo'))
+        
+        # 파일 업로드 기능 (key를 사용해서 초기화 가능하게 함)
+        if 'file_uploader_key' not in st.session_state:
+            st.session_state.file_uploader_key = 0
+        
+        uploaded_files = st.file_uploader(
+            get_text('file_upload'),
+            accept_multiple_files=True,
+            type=['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'],
+            help=get_text('file_upload_help'),
+            key=f"file_upload_{st.session_state.file_uploader_key}"
+        )
+        
+        # 업로드된 파일 목록 표시
+        attachment_info = ""
+        if uploaded_files:
+            st.write(f"{get_text('uploaded_files')}")
+            for file in uploaded_files:
+                st.write(f"- {file.name} ({file.size:,} bytes)")
+                attachment_info += f"{file.name}({file.size:,}bytes); "
+        
+        additional_notes = st.text_area(
+            get_text('additional_notes'),
+            placeholder=get_text('additional_notes_placeholder'),
+            height=60
+        )
+        
+        submitted = st.form_submit_button(f"📤 {get_text('submit_request')}", type="primary", use_container_width=True)
+        
+        if submitted:
+            if not expense_type or not amount or not purpose:
+                st.error(f"❌ {get_text('required_fields_error')}")
+                return
+            
+            # 요청서 데이터 생성 (필드명을 데이터베이스 스키마에 맞춤)
+            request_data = {
+                'requester_id': current_user_id,
+                'requester_name': current_user_name,
+                'expense_title': expense_type,  # expense_type → expense_title
+                'category': expense_type,  # 카테고리 추가
+                'amount': amount,
+                'currency': 'VND',
+                'expected_date': expense_date.strftime('%Y-%m-%d'),  # expense_date → expected_date
+                'expense_description': purpose,  # purpose → expense_description
+                'vendor': vendor if vendor else '',
+                'priority': priority,
+                'attachment': attachment_info if attachment_info else '',  # attachments → attachment
+                'notes': additional_notes if additional_notes else '',  # additional_notes → notes
+                'status': 'pending'
+            }
+            
+            # 승인자 설정 (기본: 법인장)
+            try:
+                employee_manager = SQLiteEmployeeManager()
+                # 딕셔너리 리스트 형태로 직원 데이터 가져오기
+                all_employees = employee_manager.get_all_employees_list()
+                
+                # 법인장(master) 권한을 가진 직원 찾기
+                # 데이터 타입 검증 (체크리스트 4-3)
+                if not isinstance(all_employees, list):
+                    st.error(f"❌ {get_text('employee_data_error')}")
+                    st.write(f"디버깅: 데이터 타입 = {type(all_employees)}")
                     return
                 
-                # 요청서 데이터 생성 (필드명을 데이터베이스 스키마에 맞춤)
-                request_data = {
-                    'requester_id': current_user_id,
-                    'requester_name': current_user_name,
-                    'expense_title': expense_type,  # expense_type → expense_title
-                    'category': expense_type,  # 카테고리 추가
-                    'amount': amount,
-                    'currency': 'VND',
-                    'expected_date': expense_date.strftime('%Y-%m-%d'),  # expense_date → expected_date
-                    'expense_description': purpose,  # purpose → expense_description
-                    'vendor': vendor if vendor else '',
-                    'priority': priority,
-                    'attachment': attachment_info if attachment_info else '',  # attachments → attachment
-                    'notes': additional_notes if additional_notes else '',  # additional_notes → notes
-                    'status': 'pending'
+                if len(all_employees) == 0:
+                    st.error(f"❌ {get_text('no_employees_error')}")
+                    return
+                
+                # 법인장 찾기 (타입 안전성 확보) - ceo와 master 둘 다 확인
+                masters = []
+                for emp in all_employees:
+                    if isinstance(emp, dict) and emp.get('access_level') in ['master', 'ceo']:
+                        masters.append(emp)
+                
+                if not masters:
+                    st.error(f"❌ {get_text('no_approver_error')}")
+                    return
+                
+                # 첫 번째 법인장을 최종 승인자로 설정
+                final_approver = masters[0]
+                
+                # 승인자 정보가 딕셔너리인지 확인
+                if not isinstance(final_approver, dict):
+                    st.error(f"❌ {get_text('approver_info_error')}")
+                    return
+                
+                # 승인자 정보를 request_data에 추가 (새 매니저 방식)
+                request_data['first_approver'] = {
+                    'approver_id': final_approver.get('employee_id', ''),
+                    'approver_name': final_approver.get('name', '')
                 }
                 
-                # 승인자 설정 (기본: 법인장)
-                try:
-                    employee_manager = SQLiteEmployeeManager()
-                    # 딕셔너리 리스트 형태로 직원 데이터 가져오기
-                    all_employees = employee_manager.get_all_employees_list()
+                # 요청서 생성
+                success, message = expense_manager.create_expense_request(request_data)
+                
+                if success:
+                    st.success(f"✅ {message}")
+                    approver_name = final_approver.get('name', '알 수 없음')
+                    approver_id = final_approver.get('employee_id', '알 수 없음')
+                    st.info(f"📋 승인자: {approver_name} ({approver_id})")
                     
-                    # 법인장(master) 권한을 가진 직원 찾기
-                    # 데이터 타입 검증 (체크리스트 4-3)
-                    if not isinstance(all_employees, list):
-                        st.error(f"❌ {get_text('employee_data_error')}")
-                        st.write(f"디버깅: 데이터 타입 = {type(all_employees)}")
-                        return
+                    # 파일 업로더 초기화를 위해 key 변경
+                    st.session_state.file_uploader_key += 1
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
                     
-                    if len(all_employees) == 0:
-                        st.error(f"❌ {get_text('no_employees_error')}")
-                        return
-                    
-                    # 법인장 찾기 (타입 안전성 확보) - ceo와 master 둘 다 확인
-                    masters = []
-                    for emp in all_employees:
-                        if isinstance(emp, dict) and emp.get('access_level') in ['master', 'ceo']:
-                            masters.append(emp)
-                    
-                    if not masters:
-                        st.error(f"❌ {get_text('no_approver_error')}")
-                        return
-                    
-                    # 첫 번째 법인장을 최종 승인자로 설정
-                    final_approver = masters[0]
-                    
-                    # 승인자 정보가 딕셔너리인지 확인
-                    if not isinstance(final_approver, dict):
-                        st.error(f"❌ {get_text('approver_info_error')}")
-                        return
-                    
-                    # 승인자 정보를 request_data에 추가 (새 매니저 방식)
-                    request_data['first_approver'] = {
-                        'approver_id': final_approver.get('employee_id', ''),
-                        'approver_name': final_approver.get('name', '')
-                    }
-                    
-                    # 요청서 생성
-                    success, message = expense_manager.create_expense_request(request_data)
-                    
-                    if success:
-                        st.success(f"✅ {message}")
-                        approver_name = final_approver.get('name', '알 수 없음')
-                        approver_id = final_approver.get('employee_id', '알 수 없음')
-                        st.info(f"📋 승인자: {approver_name} ({approver_id})")
-                        
-                        # 파일 업로더 초기화를 위해 key 변경
-                        st.session_state.file_uploader_key += 1
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {message}")
-                        
-                except Exception as e:
-                    st.error(f"❌ 요청서 제출 중 오류가 발생했습니다: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ 요청서 제출 중 오류가 발생했습니다: {str(e)}")
 
 def show_my_requests_status(expense_manager, user_id, get_text):
     """내 요청서 진행상태 확인"""
