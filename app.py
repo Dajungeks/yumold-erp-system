@@ -1012,10 +1012,7 @@ def show_dashboard_for_menu(system_key, selected_submenu):
     elif system_key == 'shipping_management':
         show_shipping_dashboard(managers, selected_submenu, get_text)
     elif system_key == 'approval_management':
-        show_approval_dashboard(managers, selected_submenu, get_text)
-    elif system_key == "password_admin":
-        from pages.password_admin import show_password_admin_page
-        show_password_admin_page()   
+        show_approval_dashboard(managers, selected_submenu, get_text)  
     elif system_key == 'quotation_management':
         # 새로운 견적서 관리 시스템
         from pages.quotation_page import main as show_quotation_page
@@ -2576,9 +2573,7 @@ def show_page_for_menu(system_key):
                     st.session_state.selected_system = "backup_management"
                     st.rerun()
             with col3:
-                if st.button("🔐 비밀번호 관리", use_container_width=True):
-                    st.session_state.selected_system = "password_admin"
-                    st.rerun()
+                    st.write("")  # 빈 공간
             
             # 추가 버튼 행
             col4, col5, col6 = st.columns(3)
