@@ -1644,11 +1644,14 @@ def show_annual_leave_management(manager, get_text=lambda x: x):
         st.info("연차 데이터가 없습니다.")
 
 def show_password_management(manager, auth_manager, get_text=lambda x: x):
-    """비밀번호 관리 기능"""
+    """비밀번호 관리 기능 - 개선된 UI"""
     st.header("🔑 직원 비밀번호 관리")
     
     # 직원 목록 가져오기
     import pandas as pd
+    import psycopg2
+    from datetime import datetime
+    
     employees_data = manager.get_all_employees()
     
     # DataFrame과 list 처리
@@ -1666,121 +1669,323 @@ def show_password_management(manager, auth_manager, get_text=lambda x: x):
         st.info("등록된 직원이 없습니다.")
         return
     
-    # 현재 사용자 정보 가져오기
-    users_df = auth_manager.get_all_users()
+    # 탭으로 기능 분리
+    tab1, tab2, tab3 = st.tabs(["🔐 개별 비밀번호 재설정", "👥 일괄 초기화", "📊 계정 상태"])
     
-    st.subheader("🔐 현재 비밀번호 상태")
-    
-    # 각 직원의 비밀번호 상태 표시
-    password_status = []
-    for employee in employees_list:
-        employee_id = str(employee['employee_id'])
-        user_info = None
+    with tab1:
+        st.subheader("👤 개별 비밀번호 재설정")
         
-        # DataFrame에서 해당 사용자 찾기
-        if len(users_df) > 0:
-            user_match = users_df[users_df['user_id'].astype(str) == employee_id]
-            if len(user_match) > 0:
-                user_info = user_match.iloc[0].to_dict()
+        # 직원 검색 필터
+        col_search, col_dept = st.columns([2, 1])
+        with col_search:
+            search_term = st.text_input("🔍 직원 검색 (이름/사번)", placeholder="검색어 입력...")
+        with col_dept:
+            departments = list(set([emp.get('department', '전체') for emp in employees_list]))
+            departments = ['전체'] + sorted([d for d in departments if d])
+            selected_dept = st.selectbox("부서 필터", departments)
         
-        status = {
-            "사번": employee_id,
-            "이름": employee.get('name', ''),
-            "계정 상태": "등록됨" if user_info else "미등록",
-            "마지막 로그인": user_info.get('last_login', '없음') if user_info else '없음'
-        }
-        password_status.append(status)
-    
-    # 상태 테이블 표시
-    status_df = pd.DataFrame(password_status)
-    st.dataframe(status_df, use_container_width=True)
-    
-    st.divider()
-    
-    # 개별 비밀번호 재설정
-    st.subheader("👤 개별 비밀번호 재설정")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # 직원 선택
-        employee_options = []
-        for employee in employees_list:
-            employee_id = str(employee['employee_id'])
-            name = employee.get('name', '')
-            employee_options.append(f"{employee_id} - {name}")
+        # 필터링된 직원 목록
+        filtered_employees = []
+        for emp in employees_list:
+            if search_term and search_term.lower() not in emp.get('name', '').lower() and search_term not in str(emp.get('employee_id', '')):
+                continue
+            if selected_dept != '전체' and emp.get('department', '') != selected_dept:
+                continue
+            filtered_employees.append(emp)
         
-        selected_employee = st.selectbox("직원 선택", employee_options, key="password_reset_employee_select")
-        
-        selected_id = ""
-        new_password = ""
-        confirm_password = ""
-        
-        if selected_employee:
-            selected_id = selected_employee.split(" - ")[0]
+        if filtered_employees:
+            # 직원 카드 형태로 표시
+            st.markdown("---")
             
-            # 세션 상태를 사용하여 직원 변경 시 비밀번호 필드 초기화
-            if 'selected_employee_for_password' not in st.session_state:
-                st.session_state.selected_employee_for_password = selected_employee
+            # 직원 선택
+            employee_options = []
+            for emp in filtered_employees:
+                employee_id = str(emp['employee_id'])
+                name = emp.get('name', '')
+                dept = emp.get('department', '')
+                position = emp.get('position', '')
+                employee_options.append({
+                    'label': f"{employee_id} - {name} ({dept} / {position})",
+                    'id': employee_id,
+                    'name': name
+                })
             
-            # 직원이 변경되면 비밀번호 필드 초기화
-            if st.session_state.selected_employee_for_password != selected_employee:
-                st.session_state.selected_employee_for_password = selected_employee
-                if 'password_reset_new_password' in st.session_state:
-                    del st.session_state.password_reset_new_password
-                if 'password_reset_confirm_password' in st.session_state:
-                    del st.session_state.password_reset_confirm_password
-            
-            # 현재 저장된 비밀번호 조회
-            current_password = ""
-            try:
-                with auth_manager.get_connection() as conn:
-                    cursor = conn.execute('''
-                        SELECT password FROM employees 
-                        WHERE employee_id = ? AND status = 'active'
-                    ''', (selected_id,))
-                    result = cursor.fetchone()
-                    if result:
-                        current_password = result[0] or ""
-            except:
-                pass
-            
-            # 현재 비밀번호를 기본값으로 사용
-            default_password = current_password if current_password else "1111"
-            
-            new_password = st.text_input(
-                "새 비밀번호", 
-                type="password", 
-                value=default_password,
-                key="password_reset_new_password"
+            selected_index = st.selectbox(
+                "직원 선택",
+                range(len(employee_options)),
+                format_func=lambda x: employee_options[x]['label'],
+                key="emp_select_for_password"
             )
-            confirm_password = st.text_input(
-                "비밀번호 확인", 
-                type="password", 
-                value=default_password,
-                key="password_reset_confirm_password"
-            )
+            
+            if selected_index is not None:
+                selected_emp = employee_options[selected_index]
+                
+                # 선택된 직원 정보 카드
+                with st.container():
+                    st.info(f"**선택된 직원:** {selected_emp['name']} (사번: {selected_emp['id']})")
+                    
+                    # 비밀번호 설정 폼
+                    with st.form("password_reset_form", clear_on_submit=True):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            new_password = st.text_input(
+                                "새 비밀번호",
+                                type="password",
+                                placeholder="새 비밀번호 입력",
+                                help="최소 4자리 이상"
+                            )
+                        
+                        with col2:
+                            confirm_password = st.text_input(
+                                "비밀번호 확인",
+                                type="password",
+                                placeholder="비밀번호 다시 입력"
+                            )
+                        
+                        # PostgreSQL 직접 연결 사용
+                        use_default = st.checkbox("기본 비밀번호(1111)로 초기화", value=False)
+                        
+                        submitted = st.form_submit_button("🔄 비밀번호 재설정", use_container_width=True, type="primary")
+                        
+                        if submitted:
+                            if use_default:
+                                # 기본 비밀번호로 설정
+                                try:
+                                    conn = psycopg2.connect(
+                                        host=st.secrets["postgres"]["host"],
+                                        port=st.secrets["postgres"]["port"],
+                                        database=st.secrets["postgres"]["database"],
+                                        user=st.secrets["postgres"]["user"],
+                                        password=st.secrets["postgres"]["password"]
+                                    )
+                                    cursor = conn.cursor()
+                                    
+                                    cursor.execute("""
+                                        UPDATE employees 
+                                        SET password = NULL,
+                                            password_change_required = TRUE,
+                                            login_attempts = 0,
+                                            account_locked_until = NULL
+                                        WHERE employee_id = %s
+                                    """, (selected_emp['id'],))
+                                    
+                                    conn.commit()
+                                    cursor.close()
+                                    conn.close()
+                                    
+                                    st.success(f"✅ {selected_emp['name']}님의 비밀번호가 기본값(1111)으로 초기화되었습니다.")
+                                except Exception as e:
+                                    st.error(f"오류 발생: {e}")
+                            else:
+                                # 새 비밀번호로 설정
+                                if not new_password:
+                                    st.error("비밀번호를 입력해주세요.")
+                                elif new_password != confirm_password:
+                                    st.error("비밀번호가 일치하지 않습니다.")
+                                elif len(new_password) < 4:
+                                    st.error("비밀번호는 최소 4자리 이상이어야 합니다.")
+                                else:
+                                    try:
+                                        import bcrypt
+                                        
+                                        # bcrypt 해시 생성
+                                        hashed = bcrypt.hashpw(
+                                            new_password.encode('utf-8'),
+                                            bcrypt.gensalt()
+                                        ).decode('utf-8')
+                                        
+                                        conn = psycopg2.connect(
+                                            host=st.secrets["postgres"]["host"],
+                                            port=st.secrets["postgres"]["port"],
+                                            database=st.secrets["postgres"]["database"],
+                                            user=st.secrets["postgres"]["user"],
+                                            password=st.secrets["postgres"]["password"]
+                                        )
+                                        cursor = conn.cursor()
+                                        
+                                        cursor.execute("""
+                                            UPDATE employees 
+                                            SET password = %s,
+                                                password_changed_date = NOW(),
+                                                password_change_required = FALSE,
+                                                login_attempts = 0,
+                                                account_locked_until = NULL
+                                            WHERE employee_id = %s
+                                        """, (hashed, selected_emp['id']))
+                                        
+                                        conn.commit()
+                                        cursor.close()
+                                        conn.close()
+                                        
+                                        st.success(f"✅ {selected_emp['name']}님의 비밀번호가 변경되었습니다.")
+                                    except Exception as e:
+                                        st.error(f"오류 발생: {e}")
+        else:
+            st.warning("검색 결과가 없습니다.")
     
-    with col2:
-        st.write("")  # 공간 확보
-        st.write("")
-        if st.button("비밀번호 재설정", type="primary", use_container_width=True):
-            if not selected_id:
-                st.error("직원을 선택해주세요.")
-            elif new_password != confirm_password:
-                st.error("비밀번호가 일치하지 않습니다.")
-            elif len(new_password) < 4:
-                st.error("비밀번호는 최소 4자리 이상이어야 합니다.")
+    with tab2:
+        st.subheader("👥 일괄 비밀번호 초기화")
+        
+        st.warning("⚠️ 선택한 모든 직원의 비밀번호가 기본값(1111)으로 초기화됩니다.")
+        
+        # 부서별 선택
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            dept_options = ['전체'] + sorted(list(set([emp.get('department', '') for emp in employees_list if emp.get('department')])))
+            selected_bulk_dept = st.selectbox("부서 선택", dept_options, key="bulk_dept")
+        
+        with col2:
+            if selected_bulk_dept == '전체':
+                target_count = len(employees_list)
             else:
-                # 관리자 권한으로 비밀번호 강제 재설정
-                success, message = auth_manager.reset_user_password(selected_id, new_password)
-                if success:
-                    st.success(f"사번 {selected_id}의 비밀번호가 재설정되었습니다.")
-                    st.info(message)
-                    # st.rerun() 제거됨
-                else:
-                    st.error(f"비밀번호 재설정에 실패했습니다: {message}")
+                target_count = len([emp for emp in employees_list if emp.get('department') == selected_bulk_dept])
+            st.metric("대상 직원 수", f"{target_count}명")
+        
+        # 안전 확인
+        confirm_text = st.text_input("확인을 위해 'RESET'을 입력하세요", placeholder="RESET")
+        
+        if st.button("🔄 일괄 초기화", type="secondary", use_container_width=True):
+            if confirm_text != "RESET":
+                st.error("확인 문자를 정확히 입력해주세요.")
+            else:
+                try:
+                    conn = psycopg2.connect(
+                        host=st.secrets["postgres"]["host"],
+                        port=st.secrets["postgres"]["port"],
+                        database=st.secrets["postgres"]["database"],
+                        user=st.secrets["postgres"]["user"],
+                        password=st.secrets["postgres"]["password"]
+                    )
+                    cursor = conn.cursor()
+                    
+                    if selected_bulk_dept == '전체':
+                        cursor.execute("""
+                            UPDATE employees 
+                            SET password = NULL,
+                                password_change_required = TRUE,
+                                login_attempts = 0,
+                                account_locked_until = NULL
+                        """)
+                    else:
+                        cursor.execute("""
+                            UPDATE employees 
+                            SET password = NULL,
+                                password_change_required = TRUE,
+                                login_attempts = 0,
+                                account_locked_until = NULL
+                            WHERE department = %s
+                        """, (selected_bulk_dept,))
+                    
+                    affected_rows = cursor.rowcount
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                    
+                    st.success(f"✅ {affected_rows}명의 비밀번호가 초기화되었습니다.")
+                except Exception as e:
+                    st.error(f"오류 발생: {e}")
     
+    with tab3:
+        st.subheader("📊 계정 상태 현황")
+        
+        # 상태 통계
+        col1, col2, col3, col4 = st.columns(4)
+        
+        total_count = len(employees_list)
+        with col1:
+            st.metric("전체 직원", f"{total_count}명")
+        
+        # PostgreSQL에서 실제 상태 조회
+        try:
+            conn = psycopg2.connect(
+                host=st.secrets["postgres"]["host"],
+                port=st.secrets["postgres"]["port"],
+                database=st.secrets["postgres"]["database"],
+                user=st.secrets["postgres"]["user"],
+                password=st.secrets["postgres"]["password"]
+            )
+            cursor = conn.cursor()
+            
+            # 비밀번호 설정 상태 조회
+            cursor.execute("""
+                SELECT 
+                    COUNT(CASE WHEN password IS NOT NULL THEN 1 END) as password_set,
+                    COUNT(CASE WHEN password_change_required = TRUE THEN 1 END) as change_required,
+                    COUNT(CASE WHEN account_locked_until > NOW() THEN 1 END) as locked
+                FROM employees
+            """)
+            
+            result = cursor.fetchone()
+            password_set = result[0] if result else 0
+            change_required = result[1] if result else 0
+            locked_count = result[2] if result else 0
+            
+            with col2:
+                st.metric("비밀번호 설정됨", f"{password_set}명")
+            with col3:
+                st.metric("변경 필요", f"{change_required}명", delta="-" if change_required > 0 else None)
+            with col4:
+                st.metric("계정 잠김", f"{locked_count}명", delta="-" if locked_count > 0 else None)
+            
+            # 상세 테이블
+            st.markdown("---")
+            cursor.execute("""
+                SELECT 
+                    employee_id,
+                    name,
+                    department,
+                    CASE 
+                        WHEN password IS NULL THEN '미설정'
+                        ELSE '설정됨'
+                    END as password_status,
+                    CASE 
+                        WHEN password_change_required = TRUE THEN '필요'
+                        ELSE '-'
+                    END as change_status,
+                    login_attempts,
+                    CASE 
+                        WHEN account_locked_until > NOW() THEN '잠김'
+                        ELSE '정상'
+                    END as lock_status
+                FROM employees
+                ORDER BY employee_id
+            """)
+            
+            results = cursor.fetchall()
+            
+            if results:
+                df = pd.DataFrame(results, columns=[
+                    '사번', '이름', '부서', '비밀번호', '변경필요', '로그인시도', '계정상태'
+                ])
+                
+                # 스타일링 적용
+                def highlight_status(row):
+                    styles = [''] * len(row)
+                    if row['계정상태'] == '잠김':
+                        styles = ['background-color: #ffcccc'] * len(row)
+                    elif row['변경필요'] == '필요':
+                        styles = ['background-color: #ffffcc'] * len(row)
+                    return styles
+                
+                styled_df = df.style.apply(highlight_status, axis=1)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                
+                # 범례
+                col_legend1, col_legend2, col_legend3 = st.columns(3)
+                with col_legend1:
+                    st.caption("🔴 계정 잠김")
+                with col_legend2:
+                    st.caption("🟡 비밀번호 변경 필요")
+                with col_legend3:
+                    st.caption("⚪ 정상")
+            
+            cursor.close()
+            conn.close()
+            
+        except Exception as e:
+            st.error(f"상태 조회 중 오류: {e}")
 
 
 def show_employee_delete(manager, get_text=lambda x: x):
