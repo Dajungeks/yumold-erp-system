@@ -661,8 +661,8 @@ def show_login_page(lang_dict):
                             st.success(success_msg)
                             
                             # 비밀번호 변경 필요시 경고
-                            if need_change:
-                                st.warning("⚠️ 보안을 위해 비밀번호를 변경해주세요.")
+                            #if need_change:
+                            #    st.warning("⚠️ 보안을 위해 비밀번호를 변경해주세요.")
                             
                             st.info(info_msg)
                             cursor.close()
@@ -853,10 +853,7 @@ def show_login_page(lang_dict):
 
 def show_main_app(lang_dict):
     # 비밀번호 변경 필요 여부 확인 (임시 디버그)
-    if st.session_state.get('password_change_required'):
-        st.warning("⚠️ 보안을 위해 비밀번호를 변경해주세요.")
-    
-    # 기존 코드...
+
     """메인 애플리케이션을 표시합니다."""
     
     # 모바일 최적화 설정
