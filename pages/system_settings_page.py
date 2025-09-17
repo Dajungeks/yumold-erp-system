@@ -464,7 +464,7 @@ def show_category_table_query_section(config_manager, multi_manager):
                   AND l4.component_level = 'level4'
                   AND l5.component_level = 'level5'
                   AND l6.component_level = 'level6'
-                  AND l1.is_active = 1 AND l2.is_active = 1 AND l3.is_active = 1 AND l4.is_active = 1 AND l5.is_active = 1 AND l6.is_active = 1
+                  AND l1.is_active = true AND l2.is_active = true AND l3.is_active = true AND l4.is_active = true AND l5.is_active = true AND l6.is_active = true
 
             '''
         
