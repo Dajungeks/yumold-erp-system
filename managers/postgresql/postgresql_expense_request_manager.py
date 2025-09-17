@@ -167,9 +167,9 @@ class PostgreSQLExpenseRequestManager(BasePostgreSQLManager):
                 # 메인 지출요청서 추가
                 cursor.execute("""
                     INSERT INTO expense_requests (
-                        request_id, request_number, requester_id, requester_name, expense_title, category,
-                        amount, currency, expected_date, expense_description,
-                        notes, status, request_date, created_date, updated_date
+                        request_id, request_number, employee_id, employee_name, expense_title, category,
+                        total_amount, currency, expected_date, expense_description,
+                        notes, status, request_date, created_at, updated_at
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
