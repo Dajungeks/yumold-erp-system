@@ -103,20 +103,20 @@ class PostgreSQLExpenseRequestManager(BasePostgreSQLManager):
                 query = """
                     SELECT 
                         request_id,
-                        expense_title as expense_type,
-                        amount,
+                        purpose as expense_type,
+                        total_amount as amount,
                         currency,
                         expected_date as expense_date,
-                        expense_description as purpose,
+                        purpose as expense_description,
                         notes as additional_notes,
                         status,
                         request_date,
-                        requester_name,
-                        category,
-                        first_approver_name,
-                        attachment_path as attachment
+                        employee_name as requester_name,
+                        '' as category,
+                        '' as first_approver_name,
+                        attachments as attachment
                     FROM expense_requests 
-                    WHERE requester_id = %s
+                    WHERE employee_id = %s
                     ORDER BY request_date DESC
                 """
                 
