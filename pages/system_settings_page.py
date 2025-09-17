@@ -547,12 +547,14 @@ def show_registered_codes(config_manager, multi_manager):
     st.subheader("📝 등록된 코드 설명")
     
     try:
-        import sqlite3
+        #import sqlite3
         import pandas as pd
         
         # 데이터베이스 연결
         db_path = "erp_system.db"
-        conn = sqlite3.connect(db_path)
+        # PostgreSQL 연결로 변경
+        postgres_manager = BasePostgreSQLManager()
+        conn = postgres_manager.get_connection()
         cursor = conn.cursor()
         
         # 하위 카테고리 컬럼명
@@ -650,7 +652,7 @@ def show_registered_codes(config_manager, multi_manager):
             
             data_rows.append(row_data)
         
-        conn.close()
+        postgres_manager.close_connection(conn)
         
         # 데이터프레임 생성 (메인 카테고리가 좌측에 표시됨)
         df = pd.DataFrame(data_rows, columns=[""] + sub_categories)
@@ -696,12 +698,14 @@ def show_code_registration_status(config_manager):
     st.subheader("📊 코드 등록 현황")
     
     try:
-        import sqlite3
+        #import sqlite3
         import pandas as pd
         
         # 데이터베이스 연결
         db_path = "erp_system.db"
-        conn = sqlite3.connect(db_path)
+        # PostgreSQL 연결로 변경
+        postgres_manager = BasePostgreSQLManager()
+        conn = postgres_manager.get_connection()
         cursor = conn.cursor()
         
         # 하위 카테고리 컬럼명
@@ -765,7 +769,7 @@ def show_code_registration_status(config_manager):
             
             data_rows.append(row_data)
         
-        conn.close()
+        postgres_manager.close_connection(conn)
         
         # 데이터프레임 생성 (메인 카테고리가 좌측에 표시됨)
         df = pd.DataFrame(data_rows, columns=[""] + sub_categories)
@@ -1162,8 +1166,10 @@ def manage_hr_sizes(config_manager):
                                                     st.info(f"🎯 제품 코드 변환: {old_product_code} → {new_product_code}")
                                                     
                                                     # 기존 제품 조회
-                                                    import sqlite3
-                                                    conn = sqlite3.connect(master_manager.db_path)
+                                                    #import sqlite3
+                                                    # PostgreSQL 연결로 변경
+                                                    postgres_manager = BasePostgreSQLManager()
+                                                    conn = postgres_manager.get_connection()
                                                     cursor = conn.cursor()
                                                     
                                                     cursor.execute("SELECT * FROM master_products WHERE product_code = ?", (old_product_code,))
@@ -1186,7 +1192,7 @@ def manage_hr_sizes(config_manager):
                                                         
                                                         updated_count = cursor.rowcount
                                                         conn.commit()
-                                                        conn.close()
+                                                        postgres_manager.close_connection(conn)
                                                         
                                                         if updated_count > 0:
                                                             st.success(f"🎯 **제품 자동 업데이트 완료!** `{old_product_code}` → `{new_product_code}`")
@@ -1194,7 +1200,7 @@ def manage_hr_sizes(config_manager):
                                                             st.warning(f"⚠️ 제품 업데이트 실패: {old_product_code}")
                                                     else:
                                                         st.warning(f"⚠️ 기존 제품을 찾을 수 없음: {old_product_code}")
-                                                        conn.close()
+                                                        postgres_manager.close_connection(conn)
                                                 else:
                                                     st.error(f"❌ Parent Key 형식 오류: {parent_key}")
                                                         
