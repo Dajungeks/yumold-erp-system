@@ -14,6 +14,52 @@ class PostgreSQLExpenseRequestManager(BasePostgreSQLManager):
     def __init__(self):
         super().__init__()
         self.init_tables()
+    def delete_expense_request(self, request_id, user_id):
+        """지출요청서 삭제"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # 권한 확인 및 삭제
+                cursor.execute("""
+                    DELETE FROM expense_requests 
+                    WHERE request_id = %s 
+                    AND employee_id = %s
+                    AND status = 'pending'
+                """, (request_id, user_id))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    return True, "지출요청서가 삭제되었습니다."
+                else:
+                    return False, "삭제 권한이 없거나 이미 처리된 요청입니다."
+                    
+        except Exception as e:
+            self.log_error(f"지출요청서 삭제 중 오류: {e}")
+            return False, f"삭제 중 오류 발생: {e}"
+
+def cancel_expense_request(self, request_id):
+    """지출요청서 취소"""
+    try:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE expense_requests 
+                SET status = 'cancelled'
+                WHERE request_id = %s
+                AND status = 'pending'
+            """, (request_id,))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                return True, "지출요청서가 취소되었습니다."
+            else:
+                return False, "취소할 수 없는 상태입니다."
+                
+    except Exception as e:
+        self.log_error(f"지출요청서 취소 중 오류: {e}")
+        return False, f"취소 중 오류 발생: {e}"
     
     def init_tables(self):
         """ExpenseRequest 관련 테이블 초기화"""
