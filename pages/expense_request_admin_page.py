@@ -603,8 +603,53 @@ def show_my_requests_status(expense_manager, user_id, get_text):
     """내 요청서 진행상태 확인"""
     st.header("📋 내 요청서 진행상태")
     
-    # 내 요청서 목록 가져오기
-    my_requests = expense_manager.get_my_requests(user_id)
+    # PostgreSQL에서 직접 조회
+    import psycopg2
+    
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                request_id,
+                expense_title as expense_type,
+                total_amount as amount,
+                currency,
+                expected_date as expense_date,
+                expense_description as purpose,
+                notes as additional_notes,
+                status,
+                request_date,
+                employee_name as requester_name,
+                category,
+                first_approver_name,
+                attachments as attachment
+            FROM expense_requests 
+            WHERE employee_id = %s
+            ORDER BY request_date DESC
+        """, (user_id,))
+        
+        columns = [desc[0] for desc in cursor.description]
+        my_requests = []
+        
+        for row in cursor.fetchall():
+            request_dict = dict(zip(columns, row))
+            request_dict['priority'] = 'normal'
+            request_dict['vendor'] = ''
+            my_requests.append(request_dict)
+        
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        st.error(f"데이터 조회 중 오류: {e}")
+        my_requests = []
     
     if not my_requests:
         st.info("📄 등록된 지출요청서가 없습니다.")
