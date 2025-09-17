@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 from managers.legacy.multi_category_manager import MultiCategoryManager
 # 기존 import들 아래에 추가
-from managers.postgresql.postgres_manager import PostgreSQLManager
+from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
 
 def show_system_settings_page(config_manager, get_text, hide_header=False, managers=None):
     """시스템 설정 메인 페이지"""
@@ -467,8 +467,6 @@ def show_category_table_query_section(config_manager, multi_manager):
                 ORDER BY l1.component_key, l2.component_key, l3.component_key, l4.component_key, l5.component_key, l6.component_key
             '''
         
-        # PostgreSQL 연결로 변경
-        from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
         postgres_manager = BasePostgreSQLManager()
         postgres_conn = postgres_manager.get_connection()
         
