@@ -393,7 +393,306 @@ def show_total_catalog(config_manager, multi_manager):
     with catalog_tabs[1]:
         # 카테고리별 테이블 조회 (Category A~G)
         show_category_table_query_section(config_manager, multi_manager)
+def show_data_management_section(config_manager, multi_manager):
+    """데이터 관리 섹션 - CSV 다운로드/업로드"""
+    st.subheader("📊 데이터 관리")
+    st.caption("카테고리별 CSV 다운로드 및 업로드를 통한 데이터 백업/복원")
+    
+    # 데이터 관리 탭 구성
+    data_tabs = st.tabs(["📥 데이터 다운로드", "📤 데이터 업로드"])
+    
+    with data_tabs[0]:
+        show_csv_download_section()
+    
+    with data_tabs[1]:
+        show_csv_upload_section()
 
+def show_csv_download_section():
+    """CSV 다운로드 섹션"""
+    st.markdown("### 📥 카테고리별 데이터 다운로드")
+    
+    categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    
+    # 전체 다운로드
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📦 모든 카테고리 다운로드", use_container_width=True, type="primary"):
+            download_all_categories()
+    
+    with col2:
+        st.info("모든 카테고리 데이터를 ZIP 파일로 다운로드합니다.")
+    
+    st.markdown("---")
+    
+    # 개별 카테고리 다운로드
+    st.markdown("#### 개별 카테고리 다운로드")
+    
+    # 3열로 카테고리 버튼 배치
+    cols = st.columns(3)
+    
+    for i, category in enumerate(categories):
+        with cols[i % 3]:
+            if st.button(f"📋 Category {category}", key=f"download_{category}", use_container_width=True):
+                download_category_csv(category)
+
+def show_csv_upload_section():
+    """CSV 업로드 섹션"""
+    st.markdown("### 📤 카테고리별 데이터 업로드")
+    
+    st.warning("⚠️ 업로드 시 해당 카테고리의 기존 데이터가 모두 삭제됩니다.")
+    
+    # 카테고리 선택
+    selected_category = st.selectbox(
+        "업로드할 카테고리 선택",
+        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'],
+        help="업로드할 데이터의 카테고리를 선택하세요"
+    )
+    
+    # 파일 업로드
+    uploaded_file = st.file_uploader(
+        f"Category {selected_category} CSV 파일 선택",
+        type=['csv'],
+        help="CSV 파일을 선택해주세요. 기존 데이터 구조와 동일해야 합니다."
+    )
+    
+    if uploaded_file is not None:
+        # CSV 미리보기
+        try:
+            import pandas as pd
+            df = pd.read_csv(uploaded_file)
+            
+            st.markdown(f"#### 📋 {uploaded_file.name} 미리보기")
+            st.dataframe(df.head(10), use_container_width=True)
+            st.info(f"총 {len(df)}개의 레코드가 포함되어 있습니다.")
+            
+            # 데이터 검증
+            if validate_csv_structure(df, selected_category):
+                st.success("✅ CSV 파일 구조가 올바릅니다.")
+                
+                # 업로드 확인
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button(
+                        f"🔄 Category {selected_category} 데이터 교체", 
+                        type="primary", 
+                        use_container_width=True
+                    ):
+                        if upload_category_csv(df, selected_category):
+                            st.success(f"Category {selected_category} 데이터가 성공적으로 업데이트되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("데이터 업로드 중 오류가 발생했습니다.")
+            else:
+                st.error("❌ CSV 파일 구조가 올바르지 않습니다. 올바른 형식의 파일을 업로드해주세요.")
+                
+        except Exception as e:
+            st.error(f"파일 읽기 오류: {str(e)}")
+
+def download_category_csv(category):
+    """특정 카테고리 CSV 다운로드"""
+    postgres_manager = BasePostgreSQLManager()
+    conn = None
+    try:
+        import pandas as pd
+        from datetime import datetime
+        import io
+        
+        conn = postgres_manager.get_connection()
+        
+        if category == 'A':
+            # Category A는 hr_product_components 테이블에서
+            query = """
+                SELECT * FROM hr_product_components 
+                WHERE component_type IN ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')
+                ORDER BY component_type, display_order, component_key
+            """
+        else:
+            # Category B~I는 multi_category_components 테이블에서
+            query = """
+                SELECT * FROM multi_category_components 
+                WHERE category_type = %s
+                ORDER BY component_level, component_key
+            """
+        
+        if category == 'A':
+            df = pd.read_sql_query(query, conn)
+        else:
+            df = pd.read_sql_query(query, conn, params=(category,))
+        
+        if df.empty:
+            st.warning(f"Category {category}에 다운로드할 데이터가 없습니다.")
+            return
+        
+        # CSV 파일 생성
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        csv_data = csv_buffer.getvalue()
+        
+        # 파일명 생성
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"Category_{category}_{timestamp}.csv"
+        
+        st.download_button(
+            label=f"💾 {filename} 다운로드",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv",
+            use_container_width=True
+        )
+        
+        st.success(f"Category {category} 데이터 ({len(df)}개 레코드)가 준비되었습니다.")
+        
+    except Exception as e:
+        st.error(f"다운로드 오류: {str(e)}")
+    finally:
+        if conn and postgres_manager:
+            postgres_manager.close_connection(conn)
+
+def download_all_categories():
+    """모든 카테고리 ZIP 파일로 다운로드"""
+    postgres_manager = BasePostgreSQLManager()
+    conn = None
+    try:
+        import pandas as pd
+        import zipfile
+        import io
+        from datetime import datetime
+        
+        conn = postgres_manager.get_connection()
+        
+        # ZIP 파일 생성
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Category A
+            query_a = """
+                SELECT * FROM hr_product_components 
+                WHERE component_type IN ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')
+                ORDER BY component_type, display_order, component_key
+            """
+            df_a = pd.read_sql_query(query_a, conn)
+            if not df_a.empty:
+                csv_a = df_a.to_csv(index=False, encoding='utf-8-sig')
+                zip_file.writestr('Category_A.csv', csv_a)
+            
+            # Category B~I
+            for category in ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
+                query = """
+                    SELECT * FROM multi_category_components 
+                    WHERE category_type = %s
+                    ORDER BY component_level, component_key
+                """
+                df = pd.read_sql_query(query, conn, params=(category,))
+                if not df.empty:
+                    csv_data = df.to_csv(index=False, encoding='utf-8-sig')
+                    zip_file.writestr(f'Category_{category}.csv', csv_data)
+        
+        # ZIP 파일 다운로드
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"All_Categories_{timestamp}.zip"
+        
+        zip_buffer.seek(0)
+        st.download_button(
+            label=f"📦 {filename} 다운로드",
+            data=zip_buffer.getvalue(),
+            file_name=filename,
+            mime="application/zip",
+            use_container_width=True
+        )
+        
+        st.success("모든 카테고리 데이터가 ZIP 파일로 준비되었습니다.")
+        
+    except Exception as e:
+        st.error(f"전체 다운로드 오류: {str(e)}")
+    finally:
+        if conn and postgres_manager:
+            postgres_manager.close_connection(conn)
+
+def validate_csv_structure(df, category):
+    """CSV 파일 구조 검증"""
+    try:
+        if category == 'A':
+            # hr_product_components 구조 검증
+            required_columns = [
+                'component_id', 'component_type', 'parent_component', 
+                'component_key', 'component_name', 'is_active'
+            ]
+        else:
+            # multi_category_components 구조 검증
+            required_columns = [
+                'component_id', 'category_type', 'component_level', 
+                'parent_component', 'component_key', 'component_name', 'is_active'
+            ]
+        
+        # 필수 컬럼 확인
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            st.error(f"필수 컬럼 누락: {', '.join(missing_columns)}")
+            return False
+        
+        # 데이터 타입 기본 검증
+        if df.empty:
+            st.error("CSV 파일이 비어있습니다.")
+            return False
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"구조 검증 오류: {str(e)}")
+        return False
+
+def upload_category_csv(df, category):
+    """카테고리 CSV 데이터 업로드"""
+    postgres_manager = BasePostgreSQLManager()
+    conn = None
+    try:
+        conn = postgres_manager.get_connection()
+        cursor = conn.cursor()
+        
+        # 기존 데이터 삭제
+        if category == 'A':
+            cursor.execute("DELETE FROM hr_product_components WHERE component_type IN ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')")
+        else:
+            cursor.execute("DELETE FROM multi_category_components WHERE category_type = %s", (category,))
+        
+        # 새 데이터 삽입
+        if category == 'A':
+            table_name = 'hr_product_components'
+        else:
+            table_name = 'multi_category_components'
+        
+        # DataFrame을 데이터베이스에 삽입
+        for _, row in df.iterrows():
+            columns = list(row.index)
+            values = list(row.values)
+            
+            # NULL 값 처리
+            processed_values = []
+            for val in values:
+                if pd.isna(val) or val == '' or val == 'NULL':
+                    processed_values.append(None)
+                else:
+                    processed_values.append(val)
+            
+            placeholders = ', '.join(['%s'] * len(processed_values))
+            column_names = ', '.join(columns)
+            
+            insert_query = f"INSERT INTO {table_name} ({column_names}) VALUES ({placeholders})"
+            cursor.execute(insert_query, processed_values)
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        st.error(f"업로드 오류: {str(e)}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn and postgres_manager:
+            postgres_manager.close_connection(conn)
+            
 def show_category_table_query_section(config_manager, multi_manager):
     """카테고리별 테이블 조회 섹션"""
     
