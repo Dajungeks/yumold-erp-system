@@ -54,10 +54,50 @@ def show_pending_approvals_tab(approval_manager, employee_manager, current_user,
 def show_pending_expense_requests(current_user, user_name):
     """지출요청서 승인 대기를 표시합니다."""
     try:
-        from managers.sqlite.sqlite_expense_request_manager import SQLiteExpenseRequestManager
-        expense_manager = SQLiteExpenseRequestManager()
+        import psycopg2
+        import streamlit as st
         
-        pending_expense_requests = expense_manager.get_pending_approvals(current_user)
+        # PostgreSQL에서 직접 조회
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                ea.approval_id,
+                er.request_id,
+                er.expense_title,
+                er.total_amount as amount,
+                er.currency,
+                er.expected_date,
+                er.expense_description,
+                er.request_date,
+                er.employee_name as requester_name,
+                er.category,
+                er.first_approver_name,
+                ea.approval_step,
+                ea.status as approval_status
+            FROM expense_approvals ea
+            JOIN expense_requests er ON ea.request_id = er.id
+            WHERE ea.approver_id = %s 
+            AND ea.status = 'pending'
+            ORDER BY ea.created_date ASC
+        """, (current_user,))
+        
+        columns = [desc[0] for desc in cursor.description]
+        pending_expense_requests = []
+        
+        for row in cursor.fetchall():
+            request_dict = dict(zip(columns, row))
+            pending_expense_requests.append(request_dict)
+        
+        cursor.close()
+        conn.close()
         
         # 간단한 상태 표시
         st.info(f"현재 사용자: {user_name} (ID: {current_user}) - 승인 대기 건수: {len(pending_expense_requests) if pending_expense_requests else 0}건")
@@ -99,12 +139,47 @@ def show_pending_expense_requests(current_user, user_name):
                         
                         with col2:
                             if st.form_submit_button("✅ 승인", type="primary"):
-                                success, message = expense_manager.process_approval(
-                                    request['approval_id'], 
-                                    current_user, 
-                                    '승인', 
-                                    comments
+                                # PostgreSQL 직접 처리
+                                conn = psycopg2.connect(
+                                    host=st.secrets["postgres"]["host"],
+                                    port=st.secrets["postgres"]["port"],
+                                    database=st.secrets["postgres"]["database"],
+                                    user=st.secrets["postgres"]["user"],
+                                    password=st.secrets["postgres"]["password"]
                                 )
+                                cursor = conn.cursor()
+
+                                # 승인 처리
+                                cursor.execute("""
+                                    UPDATE expense_approvals 
+                                    SET status = %s, 
+                                        approver_comments = %s, 
+                                        approved_date = CURRENT_TIMESTAMP
+                                    WHERE approval_id = %s 
+                                    AND approver_id = %s
+                                """, ('approved', comments, request['approval_id'], current_user))
+
+                                if cursor.rowcount > 0:
+                                    # expense_requests 테이블도 업데이트
+                                    cursor.execute("""
+                                        UPDATE expense_requests 
+                                        SET status = 'approved',
+                                            updated_at = CURRENT_TIMESTAMP
+                                        WHERE id = (
+                                            SELECT request_id FROM expense_approvals 
+                                            WHERE approval_id = %s
+                                        )
+                                    """, (request['approval_id'],))
+                                    
+                                    conn.commit()
+                                    success = True
+                                    message = "승인이 완료되었습니다."
+                                else:
+                                    success = False
+                                    message = "승인 처리에 실패했습니다."
+
+                                cursor.close()
+                                conn.close()
                                 if success:
                                     st.success(f"✅ {message}")
                                     st.rerun()
@@ -114,12 +189,48 @@ def show_pending_expense_requests(current_user, user_name):
                         with col3:
                             if st.form_submit_button("❌ 반려"):
                                 if comments.strip():
-                                    success, message = expense_manager.process_approval(
-                                        request['approval_id'], 
-                                        current_user, 
-                                        '반려', 
-                                        comments
+                                    # PostgreSQL 직접 처리
+                                    conn = psycopg2.connect(
+                                        host=st.secrets["postgres"]["host"],
+                                        port=st.secrets["postgres"]["port"],
+                                        database=st.secrets["postgres"]["database"],
+                                        user=st.secrets["postgres"]["user"],
+                                        password=st.secrets["postgres"]["password"]
                                     )
+                                    cursor = conn.cursor()
+
+                                    # 반려 처리
+                                    cursor.execute("""
+                                        UPDATE expense_approvals 
+                                        SET status = %s, 
+                                            approver_comments = %s, 
+                                            approved_date = CURRENT_TIMESTAMP
+                                        WHERE approval_id = %s 
+                                        AND approver_id = %s
+                                    """, ('rejected', comments, request['approval_id'], current_user))
+
+                                    if cursor.rowcount > 0:
+                                        # expense_requests 테이블도 업데이트
+                                        cursor.execute("""
+                                            UPDATE expense_requests 
+                                            SET status = 'rejected',
+                                                updated_at = CURRENT_TIMESTAMP
+                                            WHERE id = (
+                                                SELECT request_id FROM expense_approvals 
+                                                WHERE approval_id = %s
+                                            )
+                                        """, (request['approval_id'],))
+                                        
+                                        conn.commit()
+                                        success = True
+                                        message = "반려 처리가 완료되었습니다."
+                                    else:
+                                        success = False
+                                        message = "반려 처리에 실패했습니다."
+
+                                    cursor.close()
+                                    conn.close()
+                                    
                                     if success:
                                         st.success(f"✅ {message}")
                                         st.rerun()
