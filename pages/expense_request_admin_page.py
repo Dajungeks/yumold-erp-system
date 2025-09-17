@@ -354,15 +354,16 @@ def show_expense_request_form_multi_items(expense_manager, current_user_id, curr
                 for item in valid_items:
                     cursor.execute("""
                         INSERT INTO expense_items (
-                            request_id, item_name, quantity,
-                            unit_price, total_price, memo
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                            request_id, item_description, item_category,
+                            item_amount, item_currency, vendor, item_notes
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         expense_request_id,
                         item['item_description'],
-                        1,
-                        item['item_amount'],
-                        item['item_amount'],
+                        item.get('item_category', ''),
+                        float(item['item_amount']),
+                        item.get('item_currency', currency),  # currency 변수 사용
+                        item.get('vendor', ''),
                         item.get('item_notes', '')
                     ))
 
