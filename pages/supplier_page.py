@@ -34,13 +34,36 @@ def show_supplier_page(supplier_manager, user_permissions, get_text):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            countries = [get_text("all_status")] + supplier_manager.get_countries()
+            # customer_manager에서 국가 목록 가져오기
+            try:
+                customer_manager = st.session_state.get('customer_manager')
+                if customer_manager:
+                    all_locations = customer_manager.get_all_locations()
+                    if len(all_locations) > 0 and 'country' in all_locations.columns:
+                        countries = all_locations['country'].dropna().unique().tolist()
+                        countries = [get_text("all_status")] + sorted(countries)
+                    else:
+                        countries = [get_text("all_status")]
+                else:
+                    countries = [get_text("all_status")]
+            except Exception:
+                countries = [get_text("all_status")]
+                
             country_filter = st.selectbox(get_text("country_filter"), countries)
         
         with col2:
-            business_types = [get_text("all_status")] + supplier_manager.get_business_types()
+            # 공급업체 데이터에서 사업 유형 가져오기
+            try:
+                all_suppliers = supplier_manager.get_all_suppliers()
+                if len(all_suppliers) > 0 and 'business_type' in all_suppliers.columns:
+                    business_types = all_suppliers['business_type'].dropna().unique().tolist()
+                    business_types = [get_text("all_status")] + sorted(business_types)
+                else:
+                    business_types = [get_text("all_status")]
+            except Exception:
+                business_types = [get_text("all_status")]
+                
             business_type_filter = st.selectbox(get_text("business_type_filter"), business_types)
-        
         with col3:
             search_term = st.text_input(get_text("search_company_contact"))
         
@@ -549,49 +572,36 @@ def show_supplier_page(supplier_manager, user_permissions, get_text):
             search_term = st.text_input("회사명/담당자 검색", placeholder="검색어를 입력하세요")
         
         with col2:
-            countries = supplier_manager.get_countries()
+            # customer_manager에서 국가 목록 가져오기 (tab1과 동일한 방식)
+            try:
+                customer_manager = st.session_state.get('customer_manager')
+                if customer_manager:
+                    all_locations = customer_manager.get_all_locations()
+                    if len(all_locations) > 0 and 'country' in all_locations.columns:
+                        countries = all_locations['country'].dropna().unique().tolist()
+                        countries = sorted(countries)
+                    else:
+                        countries = []
+                else:
+                    countries = []
+            except Exception:
+                countries = []
+                
             country_filter = st.selectbox("국가별 필터", ["전체"] + countries, key="search_country_filter")
         
         with col3:
-            business_types = supplier_manager.get_business_types()
-            business_type_filter = st.selectbox("사업 유형별 필터", ["전체"] + business_types, key="search_business_filter")
-        
-        # 필터링 실행
-        if st.button("🔍 검색 실행"):
-            filtered_suppliers = supplier_manager.get_filtered_suppliers(
-                country_filter=country_filter if country_filter != "전체" else None,
-                business_type_filter=business_type_filter if business_type_filter != "전체" else None,
-                search_term=search_term if search_term else None
-            )
-            
-            if len(filtered_suppliers) > 0:
-                st.success(f"검색 결과: {len(filtered_suppliers)}개의 공급업체를 찾았습니다.")
+            # 공급업체 데이터에서 사업 유형 가져오기 (tab1과 동일한 방식)
+            try:
+                all_suppliers = supplier_manager.get_all_suppliers()
+                if len(all_suppliers) > 0 and 'business_type' in all_suppliers.columns:
+                    business_types = all_suppliers['business_type'].dropna().unique().tolist()
+                    business_types = sorted(business_types)
+                else:
+                    business_types = []
+            except Exception:
+                business_types = []
                 
-                from utils.display_helper import display_supplier_table
-                display_supplier_table(filtered_suppliers)
-                
-                # 필터링된 데이터 다운로드
-                if st.button("📥 검색 결과 다운로드"):
-                    csv_buffer = io.StringIO()
-                    filtered_suppliers.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
-                    st.download_button(
-                        label="CSV 파일 다운로드",
-                        data=csv_buffer.getvalue().encode('utf-8-sig'),
-                        file_name=f"filtered_suppliers_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv"
-                    )
-            else:
-                st.warning("검색 조건에 맞는 공급업체가 없습니다.")
-        else:
-            # 전체 공급업체 목록 표시
-            all_suppliers = supplier_manager.get_all_suppliers()
-            if len(all_suppliers) > 0:
-                st.info(f"전체 {len(all_suppliers)}개의 공급업체가 등록되어 있습니다.")
-                
-                from utils.display_helper import display_supplier_table
-                display_supplier_table(all_suppliers)
-            else:
-                st.warning("등록된 공급업체가 없습니다.")
+            business_type
     
     # 하단 네비게이션 버튼  
     st.markdown("---")
