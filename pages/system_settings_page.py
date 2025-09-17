@@ -380,7 +380,11 @@ def show_total_catalog(config_manager, multi_manager):
     st.caption("등록된 모든 카테고리의 코드와 통계를 조회합니다")
     
     # Total 카탈로그 내부 탭 구성
-    catalog_tabs = st.tabs(["📝 등록된 코드 설명", "📋 카테고리별 테이블 조회"])
+    catalog_tabs = st.tabs(["📝 등록된 코드 설명", "📋 카테고리별 테이블 조회", "📊 데이터 관리"])
+    
+    # 새 탭 추가
+    with catalog_tabs[2]:
+        show_data_management_section(config_manager, multi_manager)
     
     with catalog_tabs[0]:
         # 등록된 코드 설명 표시
