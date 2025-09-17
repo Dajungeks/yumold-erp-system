@@ -642,15 +642,68 @@ class BasePostgreSQLManager:
             self.close_pool()
             self.init_pool()
             return self.pool.getconn()
-    
-def close_connection(self, conn):
-    """연결 반환 (확실히 닫기)"""
-    if conn and self.pool:
+    def init_pool(self):
+        """연결 풀 초기화"""
         try:
-            conn.close()
-            self.pool.putconn(conn)
+            if not self.pool:
+                from psycopg2 import pool
+                self.pool = pool.SimpleConnectionPool(
+                    1,  # 최소 연결
+                    5,  # 최대 연결
+                    host=self.config['host'],
+                    port=self.config['port'],
+                    database=self.config['database'],
+                    user=self.config['user'],
+                    password=self.config['password']
+                )
+                self.log_info("PostgreSQL 연결 풀 생성 완료")
+        except Exception as e:
+            self.log_error(f"연결 풀 초기화 실패: {e}")
+            self.pool = None
+
+    # ... (기존 코드는 그대로 유지, 663번 줄까지)
+
+    def __del__(self):
+        """소멸자에서 풀 자동 정리"""
+        try:
+            self.close_pool()
         except:
             pass
+    
+    def init_pool(self):
+        """연결 풀 초기화 (SimpleConnectionPool 사용)"""
+        try:
+            if not self._connection_pool:
+                from psycopg2 import pool
+                from urllib.parse import urlparse
+                
+                # DATABASE_URL 파싱
+                parsed = urlparse(self.database_url)
+                
+                self._connection_pool = pool.SimpleConnectionPool(
+                    1,  # 최소 연결
+                    5,  # 최대 연결
+                    host=parsed.hostname,
+                    port=parsed.port or 5432,
+                    database=parsed.path[1:],  # 첫 번째 '/' 제거
+                    user=parsed.username,
+                    password=parsed.password
+                )
+                self.log_info("PostgreSQL 연결 풀 생성 완료 (SimpleConnectionPool)")
+        except Exception as e:
+            self.log_error(f"연결 풀 초기화 실패: {e}")
+            self._connection_pool = None
+    
+    def close_connection(self, conn):
+        """연결 반환 (확실히 닫기)"""
+        if conn and self._connection_pool:
+            try:
+                self._connection_pool.putconn(conn)
+            except:
+                try:
+                    conn.close()
+                except:
+                    pass
     
     @staticmethod
     def format_timestamp(dt=None):
