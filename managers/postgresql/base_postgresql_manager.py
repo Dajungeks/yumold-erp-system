@@ -627,6 +627,30 @@ class BasePostgreSQLManager:
             self.close_pool()
         except:
             pass
+    def get_connection(self):
+        """연결 획득 (timeout 추가)"""
+        try:
+            if not self.pool:
+                self.init_pool()
+            
+            # timeout을 짧게 설정
+            conn = self.pool.getconn()
+            return conn
+        except Exception as e:
+            self.log_error(f"연결 획득 실패: {e}")
+            # 풀 재초기화
+            self.close_pool()
+            self.init_pool()
+            return self.pool.getconn()
+    
+def close_connection(self, conn):
+    """연결 반환 (확실히 닫기)"""
+    if conn and self.pool:
+        try:
+            conn.close()
+            self.pool.putconn(conn)
+        except:
+            pass
     
     @staticmethod
     def format_timestamp(dt=None):
