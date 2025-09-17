@@ -34,11 +34,33 @@ def show_supplier_page(supplier_manager, user_permissions, get_text):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            countries = [get_text("all_status")] + supplier_manager.get_countries()
+            try:
+                countries = [get_text("all_status")] + supplier_manager.get_countries()
+            except AttributeError:
+                # customer_manager에서 국가 목록 가져오기
+                try:
+                    customer_manager = st.session_state.get('customer_manager')
+                    if customer_manager:
+                        all_locations = customer_manager.get_all_locations()
+                        if len(all_locations) > 0 and 'country' in all_locations.columns:
+                            countries = all_locations['country'].dropna().unique().tolist()
+                            countries = [get_text("all_status")] + sorted(countries)
+                        else:
+                            countries = [get_text("all_status"), "한국", "중국", "태국", "베트남"]
+                    else:
+                        countries = [get_text("all_status"), "한국", "중국", "태국", "베트남"]
+                except Exception:
+                    countries = [get_text("all_status"), "한국", "중국", "태국", "베트남"]
+            
             country_filter = st.selectbox(get_text("country_filter"), countries)
-        
+
         with col2:
-            business_types = [get_text("all_status")] + supplier_manager.get_business_types()
+            try:
+                business_types = [get_text("all_status")] + supplier_manager.get_business_types()
+            except AttributeError:
+                # 기본 사업 유형 사용
+                business_types = [get_text("all_status"), "제조업", "무역업", "유통업", "서비스업", "IT", "기타"]
+            
             business_type_filter = st.selectbox(get_text("business_type_filter"), business_types)
         
         with col3:
@@ -549,11 +571,32 @@ def show_supplier_page(supplier_manager, user_permissions, get_text):
             search_term = st.text_input("회사명/담당자 검색", placeholder="검색어를 입력하세요")
         
         with col2:
-            countries = supplier_manager.get_countries()
+            try:
+                countries = supplier_manager.get_countries()
+            except AttributeError:
+                # customer_manager에서 가져오거나 기본값 사용
+                try:
+                    customer_manager = st.session_state.get('customer_manager')
+                    if customer_manager:
+                        all_locations = customer_manager.get_all_locations()
+                        if len(all_locations) > 0 and 'country' in all_locations.columns:
+                            countries = all_locations['country'].dropna().unique().tolist()
+                            countries = sorted(countries)
+                        else:
+                            countries = ["한국", "중국", "태국", "베트남"]
+                    else:
+                        countries = ["한국", "중국", "태국", "베트남"]
+                except Exception:
+                    countries = ["한국", "중국", "태국", "베트남"]
+            
             country_filter = st.selectbox("국가별 필터", ["전체"] + countries, key="search_country_filter")
-        
+
         with col3:
-            business_types = supplier_manager.get_business_types()
+            try:
+                business_types = supplier_manager.get_business_types()
+            except AttributeError:
+                business_types = ["제조업", "무역업", "유통업", "서비스업", "IT", "기타"]
+            
             business_type_filter = st.selectbox("사업 유형별 필터", ["전체"] + business_types, key="search_business_filter")
         
         # 필터링 실행
