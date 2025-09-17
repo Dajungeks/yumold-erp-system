@@ -543,17 +543,11 @@ def show_category_management_tabs(config_manager, multi_manager):
         manage_general_category(multi_manager, 'I')
 
 def show_registered_codes(config_manager, multi_manager):
-    """등록된 코드들을 표시하는 테이블"""
-    st.subheader("📝 등록된 코드 설명")
-    
+    postgres_manager = BasePostgreSQLManager()
+    conn = None
     try:
-        #import sqlite3
         import pandas as pd
         
-        # 데이터베이스 연결
-        db_path = "erp_system.db"
-        # PostgreSQL 연결로 변경
-        postgres_manager = BasePostgreSQLManager()
         conn = postgres_manager.get_connection()
         cursor = conn.cursor()
         
@@ -652,46 +646,12 @@ def show_registered_codes(config_manager, multi_manager):
             
             data_rows.append(row_data)
         
-        postgres_manager.close_connection(conn)
-        
-        # 데이터프레임 생성 (메인 카테고리가 좌측에 표시됨)
-        df = pd.DataFrame(data_rows, columns=[""] + sub_categories)
-        df = df.set_index("")  # 첫 번째 컬럼을 인덱스로 설정
-        
-        st.dataframe(df, use_container_width=True)
-        
-        # 총 등록 코드 수 (모든 카테고리)
-        if data_rows:
-            total_codes = 0
-            category_totals = {}
-            
-            for i, row in enumerate(data_rows):
-                category_name = row[0]
-                category_codes = row[1:8]  # Product부터 Category 6까지
-                category_total = 0
-                
-                for codes_str in category_codes:
-                    if codes_str not in ["미등록", "미구현", "오류"]:
-                        if isinstance(codes_str, str) and codes_str:
-                            category_total += len(codes_str.split(", "))
-                
-                if category_total > 0:
-                    category_totals[category_name] = category_total
-                    total_codes += category_total
-            
-            # 결과 표시
-            if category_totals:
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.info(f"📊 **전체 {total_codes}개**의 코드가 등록되어 있습니다.")
-                with col2:
-                    summary_text = " | ".join([f"{cat}: {count}개" for cat, count in category_totals.items()])
-                    st.caption(f"카테고리별: {summary_text}")
-            else:
-                st.info("아직 등록된 코드가 없습니다.")
-            
     except Exception as e:
         st.error(f"등록된 코드 조회 중 오류가 발생했습니다: {e}")
+    finally:
+        if conn and postgres_manager:
+            postgres_manager.close_connection(conn)
+
 
 def show_code_registration_status(config_manager):
     """계층별 카테고리 등록 코드 수 표시 (메인 카테고리 A~G 좌측, 하위 카테고리 상단)"""
@@ -768,19 +728,48 @@ def show_code_registration_status(config_manager):
                         row_data.append(0)
             
             data_rows.append(row_data)
-        
-        postgres_manager.close_connection(conn)
-        
+
         # 데이터프레임 생성 (메인 카테고리가 좌측에 표시됨)
         df = pd.DataFrame(data_rows, columns=[""] + sub_categories)
         df = df.set_index("")  # 첫 번째 컬럼을 인덱스로 설정
-        
+
         st.dataframe(df, use_container_width=True)
-        
-        # 총 등록 코드 수는 제거 (불필요한 정보박스)
-            
+
+        # 총 등록 코드 수 (모든 카테고리)
+        if data_rows:
+            total_codes = 0
+            category_totals = {}
+
+            for i, row in enumerate(data_rows):
+                category_name = row[0]
+                category_codes = row[1:8]  # Product부터 Category 6까지
+                category_total = 0
+
+                for codes_str in category_codes:
+                    if codes_str not in ["미등록", "미구현", "오류"]:
+                        if isinstance(codes_str, str) and codes_str:
+                            category_total += len(codes_str.split(", "))
+
+                if category_total > 0:
+                    category_totals[category_name] = category_total
+                    total_codes += category_total
+
+            # 결과 표시
+            if category_totals:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.info(f"📊 **전체 {total_codes}개**의 코드가 등록되어 있습니다.")
+                with col2:
+                    summary_text = " | ".join([f"{cat}: {count}개" for cat, count in category_totals.items()])
+                    st.caption(f"카테고리별: {summary_text}")
+            else:
+                st.info("아직 등록된 코드가 없습니다.")
+
     except Exception as e:
-        st.error(f"코드 등록 현황 조회 중 오류가 발생했습니다: {e}")
+        st.error(f"등록된 코드 조회 중 오류가 발생했습니다: {e}")
+    finally:
+        if conn and postgres_manager:
+            postgres_manager.close_connection(conn)
 
 def show_hr_subcategories(config_manager):
     """Category A 구성 요소 관리 (구성 관리만)"""
