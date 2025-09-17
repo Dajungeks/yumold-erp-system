@@ -403,11 +403,12 @@ def show_category_table_query_section(config_manager, multi_manager):
     with col2:
         st.info(f"선택된 카테고리: **{selected_category}**")
     
+    postgres_manager = BasePostgreSQLManager()
+    conn = None
     try:
         import pandas as pd
         
         # PostgreSQL 연결 사용
-        postgres_manager = BasePostgreSQLManager()
         conn = postgres_manager.get_connection()
         
         # 선택된 카테고리에 따른 테이블 및 쿼리 설정
@@ -468,11 +469,7 @@ def show_category_table_query_section(config_manager, multi_manager):
 
             '''
         
-        postgres_manager = BasePostgreSQLManager()
-        postgres_conn = postgres_manager.get_connection()
-        
-        df = pd.read_sql_query(query, postgres_conn)
-        postgres_manager.close_connection(postgres_conn)
+        df = pd.read_sql_query(query, conn)
         
         if not df.empty:
             st.subheader(f"📋 {selected_category} 완성된 코드 목록")
@@ -504,6 +501,9 @@ def show_category_table_query_section(config_manager, multi_manager):
         st.error(f"테이블 조회 중 오류가 발생했습니다: {e}")
         import traceback
         st.code(traceback.format_exc())
+    finally:
+        if conn and postgres_manager:
+            postgres_manager.close_connection(conn)
 
 def show_category_management_tabs(config_manager, multi_manager):
     """Category 관리 탭들"""
@@ -543,6 +543,9 @@ def show_category_management_tabs(config_manager, multi_manager):
         manage_general_category(multi_manager, 'I')
 
 def show_registered_codes(config_manager, multi_manager):
+    """등록된 코드들을 표시하는 테이블"""
+    st.subheader("📝 등록된 코드 설명")
+    
     postgres_manager = BasePostgreSQLManager()
     conn = None
     try:
@@ -570,8 +573,7 @@ def show_registered_codes(config_manager, multi_manager):
                     cursor.execute('''
                         SELECT DISTINCT COALESCE(description, component_name, component_key)
                         FROM hr_product_components 
-                        WHERE component_type = ? AND is_active = 1
-
+                        WHERE component_type = %s AND is_active = true
                     ''', ("level1",))
                     descriptions = cursor.fetchall()
                     
@@ -589,8 +591,7 @@ def show_registered_codes(config_manager, multi_manager):
                         cursor.execute('''
                             SELECT DISTINCT component_key 
                             FROM hr_product_components 
-                            WHERE component_type = ? AND is_active = 1
-
+                            WHERE component_type = %s AND is_active = true
                         ''', (component_type,))
                         codes = cursor.fetchall()
                         
@@ -612,8 +613,7 @@ def show_registered_codes(config_manager, multi_manager):
                     cursor.execute('''
                         SELECT DISTINCT COALESCE(description, component_name, component_key)
                         FROM multi_category_components 
-                        WHERE category_type = ? AND component_level = 'level1' AND is_active = 1
-
+                        WHERE category_type = %s AND component_level = 'level1' AND is_active = true
                     ''', (main_cat,))
                     level1_descriptions = cursor.fetchall()
                     
@@ -631,8 +631,7 @@ def show_registered_codes(config_manager, multi_manager):
                         cursor.execute('''
                             SELECT DISTINCT component_key 
                             FROM multi_category_components 
-                            WHERE category_type = ? AND component_level = ? AND is_active = 1
-
+                            WHERE category_type = %s AND component_level = %s AND is_active = true
                         ''', (main_cat, level_name))
                         codes = cursor.fetchall()
                         
@@ -646,25 +645,57 @@ def show_registered_codes(config_manager, multi_manager):
             
             data_rows.append(row_data)
         
+        # 데이터프레임 생성 (메인 카테고리가 좌측에 표시됨)
+        df = pd.DataFrame(data_rows, columns=[""] + sub_categories)
+        df = df.set_index("")  # 첫 번째 컬럼을 인덱스로 설정
+        
+        st.dataframe(df, use_container_width=True)
+        
+        # 총 등록 코드 수 (모든 카테고리)
+        if data_rows:
+            total_codes = 0
+            category_totals = {}
+            
+            for i, row in enumerate(data_rows):
+                category_name = row[0]
+                category_codes = row[1:8]  # Product부터 Category 6까지
+                category_total = 0
+                
+                for codes_str in category_codes:
+                    if codes_str not in ["미등록", "미구현", "오류"]:
+                        if isinstance(codes_str, str) and codes_str:
+                            category_total += len(codes_str.split(", "))
+                
+                if category_total > 0:
+                    category_totals[category_name] = category_total
+                    total_codes += category_total
+            
+            # 결과 표시
+            if category_totals:
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.info(f"📊 **전체 {total_codes}개**의 코드가 등록되어 있습니다.")
+                with col2:
+                    summary_text = " | ".join([f"{cat}: {count}개" for cat, count in category_totals.items()])
+                    st.caption(f"카테고리별: {summary_text}")
+            else:
+                st.info("아직 등록된 코드가 없습니다.")
+                
     except Exception as e:
         st.error(f"등록된 코드 조회 중 오류가 발생했습니다: {e}")
     finally:
         if conn and postgres_manager:
             postgres_manager.close_connection(conn)
 
-
 def show_code_registration_status(config_manager):
     """계층별 카테고리 등록 코드 수 표시 (메인 카테고리 A~G 좌측, 하위 카테고리 상단)"""
     st.subheader("📊 코드 등록 현황")
     
+    postgres_manager = BasePostgreSQLManager()
+    conn = None
     try:
-        #import sqlite3
         import pandas as pd
         
-        # 데이터베이스 연결
-        db_path = "erp_system.db"
-        # PostgreSQL 연결로 변경
-        postgres_manager = BasePostgreSQLManager()
         conn = postgres_manager.get_connection()
         cursor = conn.cursor()
         
@@ -687,7 +718,7 @@ def show_code_registration_status(config_manager):
                         cursor.execute('''
                             SELECT COUNT(DISTINCT component_key) 
                             FROM hr_product_components 
-                            WHERE component_type = ? AND is_active = 1
+                            WHERE component_type = %s AND is_active = true
                         ''', (component_type,))
                         count = cursor.fetchone()[0]
                         row_data.append(count)
@@ -707,7 +738,7 @@ def show_code_registration_status(config_manager):
                     cursor.execute('''
                         SELECT COUNT(DISTINCT component_key) 
                         FROM multi_category_components 
-                        WHERE category_type = ? AND component_level = 'level1' AND is_active = 1
+                        WHERE category_type = %s AND component_level = 'level1' AND is_active = true
                     ''', (main_cat,))
                     count = cursor.fetchone()[0]
                     row_data.append(count)
@@ -720,7 +751,7 @@ def show_code_registration_status(config_manager):
                         cursor.execute('''
                             SELECT COUNT(DISTINCT component_key) 
                             FROM multi_category_components 
-                            WHERE category_type = ? AND component_level = ? AND is_active = 1
+                            WHERE category_type = %s AND component_level = %s AND is_active = true
                         ''', (main_cat, level_name))
                         count = cursor.fetchone()[0]
                         row_data.append(count)
@@ -1128,6 +1159,8 @@ def manage_hr_sizes(config_manager):
                                         # Category A-4 변경 시 관련 제품들 자동 업데이트
                                         if old_size != new_key:
                                             st.info(f"🔄 Category A-4 변경 감지: {old_size} → {new_key}")
+                                            postgres_manager = BasePostgreSQLManager()
+                                            conn = None
                                             try:
                                                 from managers.sqlite.sqlite_master_product_manager import SQLiteMasterProductManager
                                                 master_manager = SQLiteMasterProductManager()
@@ -1155,13 +1188,10 @@ def manage_hr_sizes(config_manager):
                                                     st.info(f"🎯 제품 코드 변환: {old_product_code} → {new_product_code}")
                                                     
                                                     # 기존 제품 조회
-                                                    #import sqlite3
-                                                    # PostgreSQL 연결로 변경
-                                                    postgres_manager = BasePostgreSQLManager()
                                                     conn = postgres_manager.get_connection()
                                                     cursor = conn.cursor()
                                                     
-                                                    cursor.execute("SELECT * FROM master_products WHERE product_code = ?", (old_product_code,))
+                                                    cursor.execute("SELECT * FROM master_products WHERE product_code = %s", (old_product_code,))
                                                     existing_product = cursor.fetchone()
                                                     
                                                     if existing_product:
@@ -1175,13 +1205,12 @@ def manage_hr_sizes(config_manager):
                                                         # 제품 정보 업데이트
                                                         cursor.execute('''
                                                             UPDATE master_products 
-                                                            SET product_code = ?, product_name = ?, product_name_en = ?, product_name_vi = ?, updated_date = datetime('now')
-                                                            WHERE product_code = ?
+                                                            SET product_code = %s, product_name = %s, product_name_en = %s, product_name_vi = %s, updated_date = NOW()
+                                                            WHERE product_code = %s
                                                         ''', (new_product_code, new_korean_name, new_english_name, new_english_name, old_product_code))
                                                         
                                                         updated_count = cursor.rowcount
                                                         conn.commit()
-                                                        postgres_manager.close_connection(conn)
                                                         
                                                         if updated_count > 0:
                                                             st.success(f"🎯 **제품 자동 업데이트 완료!** `{old_product_code}` → `{new_product_code}`")
@@ -1189,7 +1218,6 @@ def manage_hr_sizes(config_manager):
                                                             st.warning(f"⚠️ 제품 업데이트 실패: {old_product_code}")
                                                     else:
                                                         st.warning(f"⚠️ 기존 제품을 찾을 수 없음: {old_product_code}")
-                                                        postgres_manager.close_connection(conn)
                                                 else:
                                                     st.error(f"❌ Parent Key 형식 오류: {parent_key}")
                                                         
@@ -1197,6 +1225,9 @@ def manage_hr_sizes(config_manager):
                                                 st.error(f"❌ 제품 자동 업데이트 오류: {str(e)}")
                                                 import traceback
                                                 st.code(traceback.format_exc())
+                                            finally:
+                                                if conn and postgres_manager:
+                                                    postgres_manager.close_connection(conn)
                                         
                                         del st.session_state[f"editing_sz_{sz['component_id']}"]
                                         st.rerun()
@@ -1264,28 +1295,28 @@ def manage_hr_sizes(config_manager):
                                             default_korean = f"{korean_base} {product_type} {gate_type} {new_key}mm"
                                             default_english = f"Hot Runner {system_type} {product_type} {gate_type} {new_key}mm"
                                         
-                                        product_data = {
-                                            'master_product_id': master_product_id,
-                                            'product_code': generated_code,
-                                            'product_name': default_korean,
-                                            'product_name_en': default_english,
-                                            'product_name_vi': default_english,
-                                            'category_name': 'HR',
-                                            'subcategory_name': product_type,
-                                            'supplier_name': '',
-                                            'specifications': 'H30,34,1.0',
-                                            'unit': 'EA',
-                                            'status': 'active'
-                                        }
-                                        
-                                        result = master_manager.add_master_product(product_data)
-                                        if result:
-                                            st.success(f"🎯 **제품 코드 자동 생성:** `{generated_code}`")
-                                            st.info("📋 HR 카테고리 목록에서 확인할 수 있습니다.")
+                                            product_data = {
+                                                'master_product_id': master_product_id,
+                                                'product_code': generated_code,
+                                                'product_name': default_korean,
+                                                'product_name_en': default_english,
+                                                'product_name_vi': default_english,
+                                                'category_name': 'HR',
+                                                'subcategory_name': product_type,
+                                                'supplier_name': '',
+                                                'specifications': 'H30,34,1.0',
+                                                'unit': 'EA',
+                                                'status': 'active'
+                                            }
+                                            
+                                            result = master_manager.add_master_product(product_data)
+                                            if result:
+                                                st.success(f"🎯 **제품 코드 자동 생성:** `{generated_code}`")
+                                                st.info("📋 HR 카테고리 목록에서 확인할 수 있습니다.")
+                                            else:
+                                                st.warning(f"⚠️ Category A-4는 추가되었지만 제품 코드 생성 실패: `{generated_code}`")
                                         else:
-                                            st.warning(f"⚠️ Category A-4는 추가되었지만 제품 코드 생성 실패: `{generated_code}`")
-                                    else:
-                                        st.info(f"ℹ️ 제품 코드 `{generated_code}`는 이미 존재합니다.")
+                                            st.info(f"ℹ️ 제품 코드 `{generated_code}`는 이미 존재합니다.")
                                         
                                 except Exception as e:
                                     st.warning(f"⚠️ Category A-4는 추가되었지만 제품 코드 자동 생성 중 오류: {e}")
@@ -1299,8 +1330,6 @@ def manage_hr_sizes(config_manager):
                             st.code(traceback.format_exc())
                     else:
                         st.warning("키는 필수입니다.")
-
-
 
 
 def manage_hr_level5_components(config_manager):
@@ -1717,5 +1746,3 @@ def get_level_number(level):
         'level6': '6'
     }
     return level_map.get(level)
-
-
