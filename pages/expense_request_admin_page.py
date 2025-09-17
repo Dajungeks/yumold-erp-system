@@ -288,16 +288,97 @@ def show_expense_request_form_multi_items(expense_manager, current_user_id, curr
                     'notes': notes if notes else ''
                 }
                 
-                # 다중 항목 요청서 저장
-                request_id = expense_manager.add_expense_request_with_items(request_data, valid_items)
+                # PostgreSQL 직접 처리로 변경
+                import psycopg2
+                from datetime import datetime
+
+                conn = psycopg2.connect(
+                    host=st.secrets["postgres"]["host"],
+                    port=st.secrets["postgres"]["port"],
+                    database=st.secrets["postgres"]["database"],
+                    user=st.secrets["postgres"]["user"],
+                    password=st.secrets["postgres"]["password"]
+                )
+                cursor = conn.cursor()
+
+                # 요청번호 생성
+                request_number = f"EXP{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                request_id = request_number
+
+                # 메인 지출요청서 추가 (승인자 정보 포함)
+                cursor.execute("""
+                    INSERT INTO expense_requests (
+                        request_id, request_number, employee_id, employee_name,
+                        expense_title, total_amount, currency, expected_date,
+                        expense_description, notes, status, request_date,
+                        created_at, updated_at, category,
+                        first_approver_id, first_approver_name
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    request_id,
+                    request_number,
+                    current_user_id,
+                    current_user_name,
+                    expense_title,
+                    total_amount,
+                    currency,
+                    expected_date.strftime('%Y-%m-%d'),
+                    expense_description,
+                    notes if notes else '',
+                    'pending',
+                    request_date.strftime('%Y-%m-%d'),
+                    datetime.now(),
+                    datetime.now(),
+                    expense_category,
+                    '2508001',  # 법인장 ID
+                    '김충성'     # 법인장 이름
+                ))
+
+                expense_request_id = cursor.fetchone()[0]
+
+                # 승인 데이터 생성
+                cursor.execute("""
+                    INSERT INTO expense_approvals (
+                        approval_id, request_id, approver_id, approver_name, status
+                    ) VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    f"APPR_{expense_request_id}",
+                    expense_request_id,
+                    '2508001',
+                    '김충성',
+                    'pending'
+                ))
+
+                # 각 항목 저장
+                for item in valid_items:
+                    cursor.execute("""
+                        INSERT INTO expense_items (
+                            request_id, item_name, quantity,
+                            unit_price, total_price, memo
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        expense_request_id,
+                        item['item_description'],
+                        1,
+                        item['item_amount'],
+                        item['item_amount'],
+                        item.get('item_notes', '')
+                    ))
+
+                conn.commit()
+                cursor.close()
+                conn.close()
+
+                request_id = expense_request_id
                 
                 if request_id:
                     # 성공 메시지 표시
                     st.success(f"✅ 지출요청서가 성공적으로 제출되었습니다!")
-                    st.info(f"📋 요청서 번호: {request_id}")
+                    st.info(f"📋 요청서 번호: {request_number}")
                     st.info(f"💰 총 금액: {total_amount:,.0f} {currency}")
                     st.info(f"📦 총 항목 수: {len(valid_items)}개")
-                    
+                    # 나머지 코드 계속...
                     # 제출된 항목들 요약 표시
                     with st.expander("📝 제출된 항목 요약", expanded=False):
                         for i, item in enumerate(valid_items, 1):
