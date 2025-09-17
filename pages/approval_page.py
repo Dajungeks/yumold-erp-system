@@ -17,10 +17,9 @@ def show_approval_page(approval_manager, employee_manager, user_permissions, get
     # 디버깅용 - 현재 사용자 정보 표시
     st.info(f"현재 로그인 사용자: {user_name} (ID: {current_user})")
     
-    # 탭 메뉴로 구성
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # 탭 메뉴로 구성 (승인처리 제거)
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📋 승인 대기",
-        "✅ 승인 처리", 
         "📊 승인 통계",
         "🔍 승인 내역",
         "📝 내 요청"
@@ -30,15 +29,12 @@ def show_approval_page(approval_manager, employee_manager, user_permissions, get
         show_pending_approvals_tab(approval_manager, employee_manager, current_user, user_name)
     
     with tab2:
-        show_approval_processing_tab(approval_manager, current_user, user_name)
-    
-    with tab3:
         show_approval_statistics_tab(approval_manager)
     
-    with tab4:
+    with tab3:
         show_approval_history_tab(approval_manager, current_user)
     
-    with tab5:
+    with tab4:
         show_my_requests_tab(approval_manager, current_user, user_name)
 
 def show_pending_approvals_tab(approval_manager, employee_manager, current_user, user_name):
