@@ -1,4 +1,9 @@
 import streamlit as st
+st.write("🔴 approval_page.py 파일 실행됨!")
+
+
+
+import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
