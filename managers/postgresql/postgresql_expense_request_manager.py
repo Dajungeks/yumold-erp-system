@@ -162,22 +162,24 @@ class PostgreSQLExpenseRequestManager(BasePostgreSQLManager):
                 
                 # request_id 생성 (UUID 기반)
                 request_id = str(uuid.uuid4())[:8]
+                request_number = f"EXP{datetime.now().strftime('%Y%m%d%H%M%S')}"  # ← 이 줄 추가
                 
                 # 메인 지출요청서 추가
                 cursor.execute("""
                     INSERT INTO expense_requests (
-                        request_id, requester_id, requester_name, expense_title, category,
+                        request_id, request_number, requester_id, requester_name, expense_title, category,
                         amount, currency, expected_date, expense_description,
                         notes, status, request_date, created_date, updated_date
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
-                    request_number,
+                    request_id,        # ← request_id 추가
+                    request_number,    # ← 이미 있음
                     request_data['requester_id'],
                     request_data['requester_name'],
                     request_data['expense_title'],
                     request_data['category'],
-                    total_amount,  # amount 컬럼에 총 금액 저장
+                    total_amount,
                     request_data['currency'],
                     request_data['expected_date'],
                     request_data['expense_description'],
