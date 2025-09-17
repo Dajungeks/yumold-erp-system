@@ -106,9 +106,9 @@ def show_pending_expense_requests(current_user, user_name):
             st.success(f"총 {len(pending_expense_requests)}건의 지출요청서 승인 대기")
             
             for request in pending_expense_requests:
-                # 날짜 처리
-                request_date_str = str(request.get('request_date', 'N/A'))[:10]
-                expected_date_str = str(request.get('expected_date', 'N/A'))
+                # 날짜 안전 처리
+                request_date_str = str(request.get('request_date', 'N/A'))[:10] if request.get('request_date') else 'N/A'
+                expected_date_str = str(request.get('expected_date', 'N/A'))[:10] if request.get('expected_date') else 'N/A'
                 
                 with st.expander(f"🎫 {request['expense_title']} - {request['amount']:,.0f} {request['currency']} ({request_date_str})"):
                     col1, col2 = st.columns(2)
@@ -259,7 +259,8 @@ def show_pending_other_requests(approval_manager, current_user, user_name):
             st.success(f"기타 승인 대기: {len(pending_requests)}건")
             
             for _, request in pending_requests.iterrows():
-                request_date_str = str(request.get('request_date', 'N/A'))[:10]
+                # 날짜 안전 처리
+                request_date_str = str(request.get('request_date', 'N/A'))[:10] if request.get('request_date') else 'N/A'
                 
                 with st.expander(f"📄 {request['request_type']} - {request['requester_name']} ({request_date_str})"):
                     col1, col2 = st.columns(2)
@@ -376,19 +377,21 @@ def show_approval_processing_tab(approval_manager, current_user, user_name):
         
         # 각 승인 건을 처리
         for i, request in enumerate(pending_requests):
-            with st.expander(f"📄 {request.get('expense_title', '제목 없음')} - {request.get('amount', 0):,} {request.get('currency', 'VND')}", expanded=True):
+            with st.expander(f"📄 {request.get('expense_title', '제목 없음')} - {request.get('amount', 0):,.0f} {request.get('currency', 'VND')}", expanded=True):
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
                     st.write(f"**요청자:** {request.get('requester_name', 'N/A')}")
-                    st.write(f"**요청일:** {str(request.get('request_date', 'N/A'))[:10]}")
+                    request_date_str = str(request.get('request_date', 'N/A'))[:10] if request.get('request_date') else 'N/A'
+                    st.write(f"**요청일:** {request_date_str}")
                     st.write(f"**지출 목적:** {request.get('expense_description', 'N/A')}")
-                    st.write(f"**예상 지출일:** {str(request.get('expected_date', 'N/A'))[:10]}")
+                    expected_date_str = str(request.get('expected_date', 'N/A'))[:10] if request.get('expected_date') else 'N/A'
+                    st.write(f"**예상 지출일:** {expected_date_str}")
                     if request.get('notes'):
                         st.write(f"**메모:** {request.get('notes')}")
                 
                 with col2:
-                    st.write(f"**금액:** {request.get('amount', 0):,} {request.get('currency', 'VND')}")
+                    st.write(f"**금액:** {request.get('amount', 0):,.0f} {request.get('currency', 'VND')}")
                     st.write(f"**카테고리:** {request.get('category', 'N/A')}")
                     st.write(f"**승인 단계:** {request.get('approval_step', 1)}")
                 
@@ -536,9 +539,204 @@ def show_approval_statistics_tab(approval_manager):
 def show_approval_history_tab(approval_manager, current_user):
     """승인 내역 탭을 표시합니다."""
     st.header("🔍 승인 내역")
-    st.info("SQLite 기반 기능입니다. PostgreSQL 연동이 필요합니다.")
+    
+    try:
+        # PostgreSQL에서 승인 내역 조회
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                ea.approval_id,
+                er.expense_title as request_type,
+                er.employee_name as requester_name,
+                er.request_date,
+                ea.status,
+                ea.approver_comments as reason,
+                ea.approved_date as approval_date,
+                'normal' as priority,
+                er.expense_description as description
+            FROM expense_approvals ea
+            JOIN expense_requests er ON ea.request_id = er.id
+            ORDER BY ea.created_date DESC
+            LIMIT 100
+        """)
+        
+        columns = [desc[0] for desc in cursor.description]
+        all_requests = []
+        
+        for row in cursor.fetchall():
+            request = dict(zip(columns, row))
+            all_requests.append(request)
+        
+        cursor.close()
+        conn.close()
+        
+        if all_requests:
+            df = pd.DataFrame(all_requests)
+            
+            # 날짜 필터
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                start_date = st.date_input(
+                    "시작일",
+                    value=datetime.now().date() - timedelta(days=30)
+                )
+            
+            with col2:
+                end_date = st.date_input(
+                    "종료일",
+                    value=datetime.now().date()
+                )
+            
+            with col3:
+                unique_statuses = df['status'].unique().tolist()
+                status_filter = st.selectbox(
+                    "상태",
+                    options=['전체'] + unique_statuses
+                )
+            
+            # 필터 적용
+            if 'request_date' in df.columns:
+                df['request_date'] = pd.to_datetime(df['request_date'])
+                filtered_df = df[
+                    (df['request_date'].dt.date >= start_date) &
+                    (df['request_date'].dt.date <= end_date)
+                ]
+            else:
+                filtered_df = df
+            
+            if status_filter != '전체':
+                filtered_df = filtered_df[filtered_df['status'] == status_filter]
+            
+            if len(filtered_df) > 0:
+                st.success(f"검색 결과: {len(filtered_df)}건")
+                
+                for _, request in filtered_df.head(20).iterrows():
+                    status_color = {
+                        'pending': '🟡', 'approved': '✅', 'rejected': '❌'
+                    }.get(request['status'], '⚪')
+                    
+                    request_date_str = str(request['request_date'])[:10] if pd.notna(request['request_date']) else 'N/A'
+                    
+                    with st.expander(f"{status_color} {request['request_type']} - {request['requester_name']} ({request_date_str})"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write(f"**승인 ID:** {request['approval_id']}")
+                            st.write(f"**요청 유형:** {request['request_type']}")
+                            st.write(f"**요청자:** {request['requester_name']}")
+                            st.write(f"**상태:** {request['status']}")
+                        
+                        with col2:
+                            st.write(f"**요청일:** {request_date_str}")
+                            st.write(f"**우선순위:** {request['priority']}")
+                            if pd.notna(request.get('approval_date')):
+                                approval_date_str = str(request['approval_date'])[:19]
+                                st.write(f"**처리일:** {approval_date_str}")
+                        
+                        st.write(f"**내용:** {request['description']}")
+                        
+                        if pd.notna(request.get('reason')):
+                            st.write(f"**처리 사유:** {request['reason']}")
+            else:
+                st.info("검색 조건에 맞는 승인 내역이 없습니다.")
+        else:
+            st.info("승인 내역이 없습니다.")
+    
+    except Exception as e:
+        st.error(f"승인 내역 조회 중 오류: {e}")
 
 def show_my_requests_tab(approval_manager, current_user, user_name):
     """내 요청 탭을 표시합니다."""
     st.header("📝 내 요청 현황")
-    st.info("SQLite 기반 기능입니다. PostgreSQL 연동이 필요합니다.")
+    
+    try:
+        # PostgreSQL에서 내 요청 조회
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                er.request_id as approval_id,
+                er.expense_title as request_type,
+                er.status,
+                er.request_date,
+                er.expense_description as description,
+                'normal' as priority
+            FROM expense_requests er
+            WHERE er.employee_id = %s
+            ORDER BY er.created_at DESC
+        """, (current_user,))
+        
+        columns = [desc[0] for desc in cursor.description]
+        my_requests = []
+        
+        for row in cursor.fetchall():
+            request = dict(zip(columns, row))
+            my_requests.append(request)
+        
+        cursor.close()
+        conn.close()
+        
+        if my_requests:
+            df = pd.DataFrame(my_requests)
+            
+            # 상태별 개수
+            status_counts = df['status'].value_counts()
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("총 요청", len(my_requests))
+            
+            with col2:
+                st.metric("대기 중", status_counts.get('pending', 0))
+            
+            with col3:
+                st.metric("승인됨", status_counts.get('approved', 0))
+            
+            with col4:
+                st.metric("거부됨", status_counts.get('rejected', 0))
+            
+            # 최근 요청들
+            st.subheader("최근 요청 내역")
+            
+            for request in my_requests[:10]:
+                status_color = {
+                    'pending': '🟡', 'approved': '✅', 'rejected': '❌'
+                }.get(request['status'], '⚪')
+                
+                request_date_str = str(request['request_date'])[:10] if request['request_date'] else 'N/A'
+                
+                with st.expander(f"{status_color} {request['request_type']} ({request_date_str})"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**요청 ID:** {request['approval_id']}")
+                        st.write(f"**요청 유형:** {request['request_type']}")
+                        st.write(f"**상태:** {request['status']}")
+                        st.write(f"**우선순위:** {request['priority']}")
+                    
+                    with col2:
+                        st.write(f"**요청일:** {request_date_str}")
+                    
+                    st.write(f"**내용:** {request['description']}")
+        else:
+            st.info("요청한 승인이 없습니다.")
+    
+    except Exception as e:
+        st.error(f"내 요청 조회 중 오류: {e}")
