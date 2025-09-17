@@ -464,7 +464,7 @@ def show_category_table_query_section(config_manager, multi_manager):
                   AND l5.component_level = 'level5'
                   AND l6.component_level = 'level6'
                   AND l1.is_active = 1 AND l2.is_active = 1 AND l3.is_active = 1 AND l4.is_active = 1 AND l5.is_active = 1 AND l6.is_active = 1
-                ORDER BY l1.component_key, l2.component_key, l3.component_key, l4.component_key, l5.component_key, l6.component_key
+
             '''
         
         postgres_manager = BasePostgreSQLManager()
@@ -574,7 +574,7 @@ def show_registered_codes(config_manager, multi_manager):
                         SELECT DISTINCT COALESCE(description, component_name, component_key)
                         FROM hr_product_components 
                         WHERE component_type = ? AND is_active = 1
-                        ORDER BY component_key
+
                     ''', ("level1",))
                     descriptions = cursor.fetchall()
                     
@@ -593,7 +593,7 @@ def show_registered_codes(config_manager, multi_manager):
                             SELECT DISTINCT component_key 
                             FROM hr_product_components 
                             WHERE component_type = ? AND is_active = 1
-                            ORDER BY component_key
+
                         ''', (component_type,))
                         codes = cursor.fetchall()
                         
@@ -616,7 +616,7 @@ def show_registered_codes(config_manager, multi_manager):
                         SELECT DISTINCT COALESCE(description, component_name, component_key)
                         FROM multi_category_components 
                         WHERE category_type = ? AND component_level = 'level1' AND is_active = 1
-                        ORDER BY component_key
+
                     ''', (main_cat,))
                     level1_descriptions = cursor.fetchall()
                     
@@ -635,7 +635,7 @@ def show_registered_codes(config_manager, multi_manager):
                             SELECT DISTINCT component_key 
                             FROM multi_category_components 
                             WHERE category_type = ? AND component_level = ? AND is_active = 1
-                            ORDER BY component_key
+
                         ''', (main_cat, level_name))
                         codes = cursor.fetchall()
                         
