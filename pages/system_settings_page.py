@@ -7,6 +7,8 @@ import pandas as pd
 import os
 from datetime import datetime
 from managers.legacy.multi_category_manager import MultiCategoryManager
+# 기존 import들 아래에 추가
+from managers.postgresql.postgres_manager import PostgreSQLManager
 
 def show_system_settings_page(config_manager, get_text, hide_header=False, managers=None):
     """시스템 설정 메인 페이지"""
@@ -465,8 +467,13 @@ def show_category_table_query_section(config_manager, multi_manager):
                 ORDER BY l1.component_key, l2.component_key, l3.component_key, l4.component_key, l5.component_key, l6.component_key
             '''
         
-        df = pd.read_sql_query(query, conn)
-        conn.close()
+        # PostgreSQL 연결로 변경
+        from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
+        postgres_manager = BasePostgreSQLManager()
+        postgres_conn = postgres_manager.get_connection()
+        
+        df = pd.read_sql_query(query, postgres_conn)
+        postgres_manager.close_connection(postgres_conn)
         
         if not df.empty:
             st.subheader(f"📋 {selected_category} 완성된 코드 목록")
