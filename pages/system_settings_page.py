@@ -404,10 +404,11 @@ def show_category_table_query_section(config_manager, multi_manager):
         st.info(f"선택된 카테고리: **{selected_category}**")
     
     try:
-        import sqlite3
         import pandas as pd
         
-        conn = sqlite3.connect('erp_system.db')
+        # PostgreSQL 연결 사용
+        postgres_manager = BasePostgreSQLManager()
+        conn = postgres_manager.get_connection()
         
         # 선택된 카테고리에 따른 테이블 및 쿼리 설정
         category_letter = selected_category.split()[-1]  # "Category A" -> "A"
