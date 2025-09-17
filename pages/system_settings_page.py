@@ -416,14 +416,14 @@ def show_category_table_query_section(config_manager, multi_manager):
             # Category A: 완성된 코드 생성 (6단계 조합) - 활성 코드만
             query = '''
                 SELECT DISTINCT
-                    (s.component_key || '-' || p.component_key || '-' || g.component_key || '-' || sz.component_key || '-' || l5.component_key || '-' || l6.component_key) as '완성된 코드',
+                    (s.component_key || '-' || p.component_key || '-' || g.component_key || '-' || sz.component_key || '-' || l5.component_key || '-' || l6.component_key) as "완성된 코드",
                     (COALESCE(s.description, s.component_name) || ' / ' || 
                      COALESCE(p.description, p.component_name) || ' / ' || 
                      COALESCE(g.description, g.component_name) || ' / ' || 
                      COALESCE(sz.description, sz.component_name) || ' / ' || 
                      COALESCE(l5.description, l5.component_name) || ' / ' || 
-                     COALESCE(l6.description, l6.component_name)) as '설명',
-                    l6.created_date as '생성일'
+                     COALESCE(l6.description, l6.component_name)) as "설명",
+                    l6.created_date as "생성일"
                 FROM hr_product_components s
                 JOIN hr_product_components p ON p.parent_component = s.component_key
                 JOIN hr_product_components g ON g.parent_component = (s.component_key || '-' || p.component_key)
@@ -443,14 +443,14 @@ def show_category_table_query_section(config_manager, multi_manager):
             # Category B~G: 완성된 코드 생성 (6단계 조합)
             query = f'''
                 SELECT DISTINCT
-                    (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key || '-' || l5.component_key || '-' || l6.component_key) as '완성된 코드',
+                    (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key || '-' || l5.component_key || '-' || l6.component_key) as "완성된 코드",
                     (COALESCE(l1.description, l1.component_name) || ' / ' || 
                      COALESCE(l2.description, l2.component_name) || ' / ' || 
                      COALESCE(l3.description, l3.component_name) || ' / ' || 
                      COALESCE(l4.description, l4.component_name) || ' / ' || 
                      COALESCE(l5.description, l5.component_name) || ' / ' || 
-                     COALESCE(l6.description, l6.component_name)) as '설명',
-                    l6.created_date as '생성일'
+                     COALESCE(l6.description, l6.component_name)) as "설명",
+                    l6.created_date as "생성일"
                 FROM multi_category_components l1
                 JOIN multi_category_components l2 ON l2.parent_component = l1.component_key AND l2.category_type = '{category_letter}'
                 JOIN multi_category_components l3 ON l3.parent_component = (l1.component_key || '-' || l2.component_key) AND l3.category_type = '{category_letter}'
