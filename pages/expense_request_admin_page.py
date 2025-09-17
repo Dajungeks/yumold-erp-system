@@ -744,22 +744,43 @@ def show_my_requests_status(expense_manager, user_id, get_text):
                 with col_action3:
                     if st.button(f"🗑️ 삭제", key=f"delete_{request.get('request_id', i)}", use_container_width=True):
                         if st.session_state.get(f'confirm_delete_{request.get("request_id", i)}', False):
-                            # 삭제 실행
+                            # PostgreSQL 직접 삭제
+                            import psycopg2
                             try:
-                                success, message = expense_manager.delete_expense_request(request.get('request_id'), user_id)
-                                if success:
-                                    st.success(message)
+                                conn = psycopg2.connect(
+                                    host=st.secrets["postgres"]["host"],
+                                    port=st.secrets["postgres"]["port"],
+                                    database=st.secrets["postgres"]["database"],
+                                    user=st.secrets["postgres"]["user"],
+                                    password=st.secrets["postgres"]["password"]
+                                )
+                                cursor = conn.cursor()
+                                
+                                cursor.execute("""
+                                    DELETE FROM expense_requests 
+                                    WHERE request_id = %s 
+                                    AND employee_id = %s
+                                    AND status = 'pending'
+                                """, (request.get('request_id'), user_id))
+                                
+                                if cursor.rowcount > 0:
+                                    conn.commit()
+                                    st.success("지출요청서가 삭제되었습니다.")
                                     st.session_state[f'confirm_delete_{request.get("request_id", i)}'] = False
+                                    cursor.close()
+                                    conn.close()
                                     st.rerun()
                                 else:
-                                    st.error(message)
+                                    cursor.close()
+                                    conn.close()
+                                    st.error("삭제 권한이 없거나 이미 처리된 요청입니다.")
                             except Exception as e:
                                 st.error(f"삭제 중 오류 발생: {str(e)}")
                         else:
                             # 삭제 확인
                             st.session_state[f'confirm_delete_{request.get("request_id", i)}'] = True
                             st.error("⚠️ 삭제하면 복구할 수 없습니다! 다시 클릭하면 삭제됩니다.")
-                    
+                            
             else:
                 # 다른 상태인 경우: 프린트 버튼만
                 col_print1, col_print2, col_print3 = st.columns(3)
