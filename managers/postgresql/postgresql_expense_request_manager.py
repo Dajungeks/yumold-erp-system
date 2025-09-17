@@ -102,7 +102,7 @@ class PostgreSQLExpenseRequestManager(BasePostgreSQLManager):
                 
                 query = """
                     SELECT 
-                        request_number as request_id,
+                        request_id,
                         expense_title as expense_type,
                         amount,
                         currency,
