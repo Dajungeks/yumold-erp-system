@@ -437,7 +437,7 @@ def show_category_table_query_section(config_manager, multi_manager):
                   AND l5.component_type = 'level5'
                   AND l6.component_type = 'level6'
                   AND s.is_active = true AND p.is_active = true AND g.is_active = true AND sz.is_active = true AND l5.is_active = true AND l6.is_active = true
-                ORDER BY s.component_key, p.component_key, g.component_key, sz.component_key, l5.component_key, l6.component_key
+
             '''
         else:
             # Category B~G: 완성된 코드 생성 (6단계 조합)
