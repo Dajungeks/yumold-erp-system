@@ -876,11 +876,11 @@ def show_category_table_query_section(config_manager, multi_manager):
                 mime="text/csv"
             )
         else:
-            # Category의 활성화 상태 확인
-            config = multi_manager.get_category_config(category_letter)
-            if not config or not config['is_enabled']:
-                st.warning(f"{selected_category}는 비활성화 상태입니다. Category 관리에서 활성화해주세요.")
-            else:
+            # Category의 활성화 상태 확인" 카달로그 비활성화 로 인한 문제 발생해서 주석 처리함
+            #config = multi_manager.get_category_config(category_letter)
+            #if not config or not config['is_enabled']:
+             #   st.warning(f"{selected_category}는 비활성화 상태입니다. Category 관리에서 활성화해주세요.")
+           # else:
                 st.info("완성된 코드가 없습니다. 6단계 구성 요소가 모두 등록되어야 완성된 코드가 생성됩니다.")
             
     except Exception as e:
