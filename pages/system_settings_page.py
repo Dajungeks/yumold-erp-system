@@ -132,12 +132,11 @@ def close_db_connection():
         del st.session_state.db_connection
         del st.session_state.postgres_manager
 
-def show_system_settings_page(config_manager, get_text, **kwargs):
-    """시스템 설정 메인 페이지 - kwargs로 모든 키워드 인자 처리"""
+def show_system_settings_page(config_manager, get_text_func, hide_header=False, managers=None):
+    """시스템 설정 메인 페이지"""
     
-    # kwargs에서 인자 추출
-    hide_header = kwargs.get('hide_header', False)
-    managers = kwargs.get('managers', None)
+    # get_text_func를 get_text로 재할당 (기존 코드 호환성)
+    get_text = get_text_func
     
     # 메인 컨텐츠 영역만 영향을 주는 레이아웃 설정
     st.markdown("""
