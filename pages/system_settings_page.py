@@ -132,8 +132,8 @@ def close_db_connection():
         del st.session_state.db_connection
         del st.session_state.postgres_manager
 
-def show_system_settings_page(config_manager=None, managers=None, hide_header=False):
-    """시스템 설정 메인 페이지"""
+def show_system_settings_page(config_manager, get_text, hide_header=False, managers=None):
+    """시스템 설정 메인 페이지 - app.py 호출 방식에 맞춤"""
     
     # 메인 컨텐츠 영역만 영향을 주는 레이아웃 설정
     st.markdown("""
