@@ -705,7 +705,7 @@ def show_category_table_query_section(config_manager, multi_manager):
               AND l4.component_level = 'level4'
               AND l5.component_level = 'level5'
               AND l6.component_level = 'level6'
-              AND l1.is_active = true AND l2.is_active = true AND l3.is_active = true AND l4.is_active = true AND l5.is_active = true AND l6.is_active = true
+              AND l1.is_active IS TRUE AND l2.is_active IS TRUE AND l3.is_active IS TRUE AND l4.is_active IS TRUE AND l5.is_active IS TRUE AND l6.is_active IS TRUE
         '''
         
         df = pd.read_sql_query(query, conn)
@@ -808,7 +808,7 @@ def show_registered_codes(config_manager, multi_manager):
                 cursor.execute('''
                     SELECT DISTINCT COALESCE(description, component_name, component_key)
                     FROM multi_category_components 
-                    WHERE category_type = %s AND component_level = 'level1' AND is_active = true
+                    WHERE category_type = %s AND component_level = 'level1' AND is_active IS TRUE
                 ''', (main_cat,))
                 level1_descriptions = cursor.fetchall()
                 
@@ -826,7 +826,7 @@ def show_registered_codes(config_manager, multi_manager):
                     cursor.execute('''
                         SELECT DISTINCT component_key 
                         FROM multi_category_components 
-                        WHERE category_type = %s AND component_level = %s AND is_active = true
+                        WHERE category_type = %s AND component_level = %s AND is_active IS TRUE
                     ''', (main_cat, level_name))
                     codes = cursor.fetchall()
                     
