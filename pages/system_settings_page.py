@@ -382,17 +382,18 @@ def show_total_catalog(config_manager, multi_manager):
     # Total 카탈로그 내부 탭 구성
     catalog_tabs = st.tabs(["📝 등록된 코드 설명", "📋 카테고리별 테이블 조회", "📊 데이터 관리"])
     
-    # 새 탭 추가
-    with catalog_tabs[2]:
-        show_data_management_section(config_manager, multi_manager)
-    
     with catalog_tabs[0]:
         # 등록된 코드 설명 표시
         show_registered_codes(config_manager, multi_manager)
     
     with catalog_tabs[1]:
-        # 카테고리별 테이블 조회 (Category A~G)
+        # 카테고리별 테이블 조회 (Category A~I)
         show_category_table_query_section(config_manager, multi_manager)
+    
+    with catalog_tabs[2]:
+        # 데이터 관리 섹션
+        show_data_management_section(config_manager, multi_manager)
+
 def show_data_management_section(config_manager, multi_manager):
     """데이터 관리 섹션 - CSV 다운로드/업로드"""
     st.subheader("📊 데이터 관리")
@@ -500,25 +501,14 @@ def download_category_csv(category):
         
         conn = postgres_manager.get_connection()
         
-        if category == 'A':
-            # Category A는 hr_product_components 테이블에서
-            query = """
-                SELECT * FROM hr_product_components 
-                WHERE component_type IN ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')
-                ORDER BY component_type, display_order, component_key
-            """
-        else:
-            # Category B~I는 multi_category_components 테이블에서
-            query = """
-                SELECT * FROM multi_category_components 
-                WHERE category_type = %s
-                ORDER BY component_level, component_key
-            """
+        # 모든 카테고리가 multi_category_components 테이블 사용 (통일됨)
+        query = """
+            SELECT * FROM multi_category_components 
+            WHERE category_type = %s
+            ORDER BY component_level, component_key
+        """
         
-        if category == 'A':
-            df = pd.read_sql_query(query, conn)
-        else:
-            df = pd.read_sql_query(query, conn, params=(category,))
+        df = pd.read_sql_query(query, conn, params=(category,))
         
         if df.empty:
             st.warning(f"Category {category}에 다운로드할 데이터가 없습니다.")
@@ -565,19 +555,8 @@ def download_all_categories():
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Category A
-            query_a = """
-                SELECT * FROM hr_product_components 
-                WHERE component_type IN ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')
-                ORDER BY component_type, display_order, component_key
-            """
-            df_a = pd.read_sql_query(query_a, conn)
-            if not df_a.empty:
-                csv_a = df_a.to_csv(index=False, encoding='utf-8-sig')
-                zip_file.writestr('Category_A.csv', csv_a)
-            
-            # Category B~I
-            for category in ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
+            # Category A~I 모두 multi_category_components에서
+            for category in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
                 query = """
                     SELECT * FROM multi_category_components 
                     WHERE category_type = %s
@@ -612,18 +591,11 @@ def download_all_categories():
 def validate_csv_structure(df, category):
     """CSV 파일 구조 검증"""
     try:
-        if category == 'A':
-            # hr_product_components 구조 검증
-            required_columns = [
-                'component_id', 'component_type', 'parent_component', 
-                'component_key', 'component_name', 'is_active'
-            ]
-        else:
-            # multi_category_components 구조 검증
-            required_columns = [
-                'component_id', 'category_type', 'component_level', 
-                'parent_component', 'component_key', 'component_name', 'is_active'
-            ]
+        # multi_category_components 구조 검증 (모든 카테고리 통일)
+        required_columns = [
+            'component_id', 'category_type', 'component_level', 
+            'parent_component', 'component_key', 'component_name', 'is_active'
+        ]
         
         # 필수 컬럼 확인
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -650,19 +622,13 @@ def upload_category_csv(df, category):
         conn = postgres_manager.get_connection()
         cursor = conn.cursor()
         
-        # 기존 데이터 삭제
-        if category == 'A':
-            cursor.execute("DELETE FROM hr_product_components WHERE component_type IN ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')")
-        else:
-            cursor.execute("DELETE FROM multi_category_components WHERE category_type = %s", (category,))
+        # 기존 데이터 삭제 (모든 카테고리가 multi_category_components 사용)
+        cursor.execute("DELETE FROM multi_category_components WHERE category_type = %s", (category,))
         
         # 새 데이터 삽입
-        if category == 'A':
-            table_name = 'hr_product_components'
-        else:
-            table_name = 'multi_category_components'
+        table_name = 'multi_category_components'
         
-        # DataFrame을 데이터베이스에 삽입
+        # DataFrame to 데이터베이스 삽입
         for _, row in df.iterrows():
             columns = list(row.index)
             values = list(row.values)
@@ -711,66 +677,36 @@ def show_category_table_query_section(config_manager, multi_manager):
     try:
         import pandas as pd
         
-        # PostgreSQL 연결 사용
         conn = postgres_manager.get_connection()
         
         # 선택된 카테고리에 따른 테이블 및 쿼리 설정
         category_letter = selected_category.split()[-1]  # "Category A" -> "A"
         
-        if category_letter == "A":
-            # Category A: 완성된 코드 생성 (6단계 조합) - 활성 코드만
-            query = '''
-                SELECT DISTINCT
-                    (s.component_key || '-' || p.component_key || '-' || g.component_key || '-' || sz.component_key || '-' || l5.component_key || '-' || l6.component_key) as "완성된 코드",
-                    (COALESCE(s.description, s.component_name) || ' / ' || 
-                     COALESCE(p.description, p.component_name) || ' / ' || 
-                     COALESCE(g.description, g.component_name) || ' / ' || 
-                     COALESCE(sz.description, sz.component_name) || ' / ' || 
-                     COALESCE(l5.description, l5.component_name) || ' / ' || 
-                     COALESCE(l6.description, l6.component_name)) as "설명",
-                    l6.created_date as "생성일"
-                FROM hr_product_components s
-                JOIN hr_product_components p ON p.parent_component = s.component_key
-                JOIN hr_product_components g ON g.parent_component = (s.component_key || '-' || p.component_key)
-                JOIN hr_product_components sz ON sz.parent_component = (s.component_key || '-' || p.component_key || '-' || g.component_key)
-                JOIN hr_product_components l5 ON l5.parent_component = (s.component_key || '-' || p.component_key || '-' || g.component_key || '-' || sz.component_key)
-                JOIN hr_product_components l6 ON l6.parent_component = (s.component_key || '-' || p.component_key || '-' || g.component_key || '-' || sz.component_key || '-' || l5.component_key)
-                WHERE s.component_type = 'system_type'
-                  AND p.component_type = 'product_type'
-                  AND g.component_type = 'gate_type'
-                  AND sz.component_type = 'size'
-                  AND l5.component_type = 'level5'
-                  AND l6.component_type = 'level6'
-                  AND s.is_active = true AND p.is_active = true AND g.is_active = true AND sz.is_active = true AND l5.is_active = true AND l6.is_active = true
-
-            '''
-        else:
-            # Category B~G: 완성된 코드 생성 (6단계 조합)
-            query = f'''
-                SELECT DISTINCT
-                    (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key || '-' || l5.component_key || '-' || l6.component_key) as "완성된 코드",
-                    (COALESCE(l1.description, l1.component_name) || ' / ' || 
-                     COALESCE(l2.description, l2.component_name) || ' / ' || 
-                     COALESCE(l3.description, l3.component_name) || ' / ' || 
-                     COALESCE(l4.description, l4.component_name) || ' / ' || 
-                     COALESCE(l5.description, l5.component_name) || ' / ' || 
-                     COALESCE(l6.description, l6.component_name)) as "설명",
-                    l6.created_date as "생성일"
-                FROM multi_category_components l1
-                JOIN multi_category_components l2 ON l2.parent_component = l1.component_key AND l2.category_type = '{category_letter}'
-                JOIN multi_category_components l3 ON l3.parent_component = (l1.component_key || '-' || l2.component_key) AND l3.category_type = '{category_letter}'
-                JOIN multi_category_components l4 ON l4.parent_component = (l1.component_key || '-' || l2.component_key || '-' || l3.component_key) AND l4.category_type = '{category_letter}'
-                JOIN multi_category_components l5 ON l5.parent_component = (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key) AND l5.category_type = '{category_letter}'
-                JOIN multi_category_components l6 ON l6.parent_component = (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key || '-' || l5.component_key) AND l6.category_type = '{category_letter}'
-                WHERE l1.category_type = '{category_letter}' AND l1.component_level = 'level1'
-                  AND l2.component_level = 'level2'
-                  AND l3.component_level = 'level3'
-                  AND l4.component_level = 'level4'
-                  AND l5.component_level = 'level5'
-                  AND l6.component_level = 'level6'
-                  AND l1.is_active = true AND l2.is_active = true AND l3.is_active = true AND l4.is_active = true AND l5.is_active = true AND l6.is_active = true
-
-            '''
+        # 모든 카테고리가 multi_category_components 테이블 사용 (통일됨)
+        query = f'''
+            SELECT DISTINCT
+                (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key || '-' || l5.component_key || '-' || l6.component_key) as "완성된 코드",
+                (COALESCE(l1.description, l1.component_name) || ' / ' || 
+                 COALESCE(l2.description, l2.component_name) || ' / ' || 
+                 COALESCE(l3.description, l3.component_name) || ' / ' || 
+                 COALESCE(l4.description, l4.component_name) || ' / ' || 
+                 COALESCE(l5.description, l5.component_name) || ' / ' || 
+                 COALESCE(l6.description, l6.component_name)) as "설명",
+                l6.created_date as "생성일"
+            FROM multi_category_components l1
+            JOIN multi_category_components l2 ON l2.parent_component = l1.component_key AND l2.category_type = '{category_letter}'
+            JOIN multi_category_components l3 ON l3.parent_component = (l1.component_key || '-' || l2.component_key) AND l3.category_type = '{category_letter}'
+            JOIN multi_category_components l4 ON l4.parent_component = (l1.component_key || '-' || l2.component_key || '-' || l3.component_key) AND l4.category_type = '{category_letter}'
+            JOIN multi_category_components l5 ON l5.parent_component = (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key) AND l5.category_type = '{category_letter}'
+            JOIN multi_category_components l6 ON l6.parent_component = (l1.component_key || '-' || l2.component_key || '-' || l3.component_key || '-' || l4.component_key || '-' || l5.component_key) AND l6.category_type = '{category_letter}'
+            WHERE l1.category_type = '{category_letter}' AND l1.component_level = 'level1'
+              AND l2.component_level = 'level2'
+              AND l3.component_level = 'level3'
+              AND l4.component_level = 'level4'
+              AND l5.component_level = 'level5'
+              AND l6.component_level = 'level6'
+              AND l1.is_active = true AND l2.is_active = true AND l3.is_active = true AND l4.is_active = true AND l5.is_active = true AND l6.is_active = true
+        '''
         
         df = pd.read_sql_query(query, conn)
         
@@ -790,15 +726,12 @@ def show_category_table_query_section(config_manager, multi_manager):
                 mime="text/csv"
             )
         else:
-            if category_letter == "A":
-                st.info("완성된 코드가 없습니다. 6단계 구성 요소가 모두 등록되어야 완성된 코드가 생성됩니다.")
+            # Category의 활성화 상태 확인
+            config = multi_manager.get_category_config(category_letter)
+            if not config or not config['is_enabled']:
+                st.warning(f"{selected_category}는 비활성화 상태입니다. Category 관리에서 활성화해주세요.")
             else:
-                # Category B~G의 활성화 상태 확인
-                config = multi_manager.get_category_config(category_letter)
-                if not config or not config['is_enabled']:
-                    st.warning(f"{selected_category}는 비활성화 상태입니다. Category 관리에서 활성화해주세요.")
-                else:
-                    st.info("완성된 코드가 없습니다. 6단계 구성 요소가 모두 등록되어야 완성된 코드가 생성됩니다.")
+                st.info("완성된 코드가 없습니다. 6단계 구성 요소가 모두 등록되어야 완성된 코드가 생성됩니다.")
             
     except Exception as e:
         st.error(f"테이블 조회 중 오류가 발생했습니다: {e}")
@@ -819,7 +752,7 @@ def show_category_management_tabs(config_manager, multi_manager):
     ])
     
     with tabs[0]:  # Category A
-        show_hr_subcategories(config_manager)
+        manage_general_category(multi_manager, 'A')
     
     with tabs[1]:  # Category B
         manage_general_category(multi_manager, 'B')
@@ -865,86 +798,45 @@ def show_registered_codes(config_manager, multi_manager):
         data_rows = []
         
         for main_cat in main_categories:
-            if main_cat == 'A':
-                row_data = ["Category A"]  # Category A로 표시
+            row_data = [f"Category {main_cat}"]
+            
+            # 모든 카테고리가 multi_category_components 테이블 사용 (통일됨)
+            level_names = ["level1", "level2", "level3", "level4", "level5", "level6"]
+            
+            # Product 컬럼: Level1의 설명 표시
+            try:
+                cursor.execute('''
+                    SELECT DISTINCT COALESCE(description, component_name, component_key)
+                    FROM multi_category_components 
+                    WHERE category_type = %s AND component_level = 'level1' AND is_active = true
+                ''', (main_cat,))
+                level1_descriptions = cursor.fetchall()
                 
-                # Category A의 경우 실제 데이터 조회
-                category_a_components = ["level1", "level2", "level3", "level4", "level5", "level6"]
-                
-                # Product 컬럼: Category A-1(level1)의 설명 표시
+                if level1_descriptions:
+                    desc_list = [desc[0] for desc in level1_descriptions]
+                    row_data.append(", ".join(desc_list))
+                else:
+                    row_data.append("미등록")
+            except Exception as e:
+                row_data.append("오류")
+            
+            # Category 1~6: 각 레벨의 키를 순차적으로 표시
+            for level_name in level_names:
                 try:
                     cursor.execute('''
-                        SELECT DISTINCT COALESCE(description, component_name, component_key)
-                        FROM hr_product_components 
-                        WHERE component_type = %s AND is_active = true
-                    ''', ("level1",))
-                    descriptions = cursor.fetchall()
-                    
-                    if descriptions:
-                        desc_list = [desc[0] for desc in descriptions]
-                        row_data.append(", ".join(desc_list))
-                    else:
-                        row_data.append("미등록")
-                except Exception as e:
-                    row_data.append("오류")
-                
-                # Category 1~6: 각 A-1~A-6의 키를 순차적으로 표시
-                for component_type in category_a_components:  # level1부터 level6까지 모든 component
-                    try:
-                        cursor.execute('''
-                            SELECT DISTINCT component_key 
-                            FROM hr_product_components 
-                            WHERE component_type = %s AND is_active = true
-                        ''', (component_type,))
-                        codes = cursor.fetchall()
-                        
-                        if codes:
-                            code_list = [code[0] for code in codes]
-                            row_data.append(", ".join(code_list))
-                        else:
-                            row_data.append("미등록")
-                    except Exception as e:
-                        row_data.append("오류")
-                
-            else:
-                row_data = [f"Category {main_cat}"]
-                # Category B~I는 Multi-Category Manager로 관리 - 실제 데이터 조회
-                level_names = ["level1", "level2", "level3", "level4", "level5", "level6"]
-                
-                # Product 컬럼: Level1의 설명 표시
-                try:
-                    cursor.execute('''
-                        SELECT DISTINCT COALESCE(description, component_name, component_key)
+                        SELECT DISTINCT component_key 
                         FROM multi_category_components 
-                        WHERE category_type = %s AND component_level = 'level1' AND is_active = true
-                    ''', (main_cat,))
-                    level1_descriptions = cursor.fetchall()
+                        WHERE category_type = %s AND component_level = %s AND is_active = true
+                    ''', (main_cat, level_name))
+                    codes = cursor.fetchall()
                     
-                    if level1_descriptions:
-                        desc_list = [desc[0] for desc in level1_descriptions]
-                        row_data.append(", ".join(desc_list))
+                    if codes:
+                        code_list = [code[0] for code in codes]
+                        row_data.append(", ".join(code_list))
                     else:
                         row_data.append("미등록")
                 except Exception as e:
                     row_data.append("오류")
-                
-                # Category 1~6: 각 레벨의 키를 순차적으로 표시
-                for level_name in level_names:
-                    try:
-                        cursor.execute('''
-                            SELECT DISTINCT component_key 
-                            FROM multi_category_components 
-                            WHERE category_type = %s AND component_level = %s AND is_active = true
-                        ''', (main_cat, level_name))
-                        codes = cursor.fetchall()
-                        
-                        if codes:
-                            code_list = [code[0] for code in codes]
-                            row_data.append(", ".join(code_list))
-                        else:
-                            row_data.append("미등록")
-                    except Exception as e:
-                        row_data.append("오류")
             
             data_rows.append(row_data)
         
@@ -989,889 +881,18 @@ def show_registered_codes(config_manager, multi_manager):
     finally:
         if conn and postgres_manager:
             postgres_manager.close_connection(conn)
-
-def show_code_registration_status(config_manager):
-    """계층별 카테고리 등록 코드 수 표시 (메인 카테고리 A~G 좌측, 하위 카테고리 상단)"""
-    st.subheader("📊 코드 등록 현황")
-    
-    postgres_manager = BasePostgreSQLManager()
-    conn = None
-    try:
-        import pandas as pd
-        
-        conn = postgres_manager.get_connection()
-        cursor = conn.cursor()
-        
-        # 하위 카테고리 컬럼명
-        sub_categories = ["Product", "Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"]
-        
-        # 메인 카테고리별 데이터 생성
-        main_categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
-        data_rows = []
-        
-        for main_cat in main_categories:
-            if main_cat == 'A':
-                row_data = ["Category A"]  # Category A로 표시
-                
-                # Category A의 경우 실제 데이터 조회
-                category_a_components = ["system_type", "product_type", "gate_type", "size", "level5", "level6"]
-                
-                for component_type in category_a_components:
-                    try:
-                        cursor.execute('''
-                            SELECT COUNT(DISTINCT component_key) 
-                            FROM hr_product_components 
-                            WHERE component_type = %s AND is_active = true
-                        ''', (component_type,))
-                        count = cursor.fetchone()[0]
-                        row_data.append(count)
-                    except Exception as e:
-                        row_data.append(0)
-                
-                # Category 6은 아직 구현되지 않음
-                row_data.append(0)
-                
-            else:
-                row_data = [f"Category {main_cat}"]
-                # Category B~I는 Multi-Category Manager로 관리 - 실제 개수 조회
-                level_names = ["level1", "level2", "level3", "level4", "level5", "level6"]
-                
-                # Product 컬럼: Level1 개수
-                try:
-                    cursor.execute('''
-                        SELECT COUNT(DISTINCT component_key) 
-                        FROM multi_category_components 
-                        WHERE category_type = %s AND component_level = 'level1' AND is_active = true
-                    ''', (main_cat,))
-                    count = cursor.fetchone()[0]
-                    row_data.append(count)
-                except Exception as e:
-                    row_data.append(0)
-                
-                # Category 1~6: 각 레벨의 개수
-                for level_name in level_names:
-                    try:
-                        cursor.execute('''
-                            SELECT COUNT(DISTINCT component_key) 
-                            FROM multi_category_components 
-                            WHERE category_type = %s AND component_level = %s AND is_active = true
-                        ''', (main_cat, level_name))
-                        count = cursor.fetchone()[0]
-                        row_data.append(count)
-                    except Exception as e:
-                        row_data.append(0)
-            
-            data_rows.append(row_data)
-
-        # 데이터프레임 생성 (메인 카테고리가 좌측에 표시됨)
-        df = pd.DataFrame(data_rows, columns=[""] + sub_categories)
-        df = df.set_index("")  # 첫 번째 컬럼을 인덱스로 설정
-
-        st.dataframe(df, use_container_width=True)
-
-        # 총 등록 코드 수 (모든 카테고리)
-        if data_rows:
-            total_codes = 0
-            category_totals = {}
-
-            for i, row in enumerate(data_rows):
-                category_name = row[0]
-                category_codes = row[1:8]  # Product부터 Category 6까지
-                category_total = 0
-
-                for codes_str in category_codes:
-                    if codes_str not in ["미등록", "미구현", "오류"]:
-                        if isinstance(codes_str, str) and codes_str:
-                            category_total += len(codes_str.split(", "))
-
-                if category_total > 0:
-                    category_totals[category_name] = category_total
-                    total_codes += category_total
-
-            # 결과 표시
-            if category_totals:
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.info(f"📊 **전체 {total_codes}개**의 코드가 등록되어 있습니다.")
-                with col2:
-                    summary_text = " | ".join([f"{cat}: {count}개" for cat, count in category_totals.items()])
-                    st.caption(f"카테고리별: {summary_text}")
-            else:
-                st.info("아직 등록된 코드가 없습니다.")
-
-    except Exception as e:
-        st.error(f"등록된 코드 조회 중 오류가 발생했습니다: {e}")
-    finally:
-        if conn and postgres_manager:
-            postgres_manager.close_connection(conn)
-
-def show_hr_subcategories(config_manager):
-    """Category A 구성 요소 관리 (구성 관리만)"""
-    st.subheader("🏗️ Category A ↗")
-    
-    # 세션 상태 초기화
-    if 'hr_component_tab' in st.session_state:
-        del st.session_state['hr_component_tab']
-    if 'settings_tab' in st.session_state:
-        del st.session_state['settings_tab']
-    
-    # Category A 구성 요소 관리 탭
-    hr_tabs = st.tabs([
-        "🔧 Category A-1 (Product)", 
-        "📋 Category A-2 (Code)", 
-        "🚪 Category A-3 (Code)", 
-        "📏 Category A-4 (Code)",
-        "🔩 Category A-5 (Code)",
-        "⚙️ Category A-6 (Code)"
-    ])
-    
-    with hr_tabs[0]:
-        manage_hr_system_types(config_manager)
-    with hr_tabs[1]:
-        manage_hr_product_types(config_manager)
-    with hr_tabs[2]:
-        manage_hr_gate_types(config_manager)
-    with hr_tabs[3]:
-        manage_hr_sizes(config_manager)
-    with hr_tabs[4]:
-        manage_hr_level5_components(config_manager)
-    with hr_tabs[5]:
-        manage_hr_level6_components(config_manager)
-
-
-def manage_hr_system_types(config_manager):
-    """Category A-1 (Product)"""
-    st.subheader("🔧 Category A-1 (Product)")
-    
-    # 현재 Category A-1 목록 표시 (활성 상태만)
-    system_types = config_manager.get_hr_components_for_management('system_type')
-    active_types = [st for st in system_types if st['is_active']] if system_types else []
-    
-    if active_types:
-        st.write("**현재 Category A-1 목록:**")
-        for st_type in active_types:
-            col1, col2, col3 = st.columns([6, 1, 1])
-            with col1:
-                st.write(f"**{st_type['component_key']}** - {st_type['component_name']}")
-                if st_type['description']:
-                    st.caption(st_type['description'])
-            with col2:
-                if st.button("✏️", key=f"edit_st_{st_type['component_id']}", help="수정", use_container_width=True):
-                    st.session_state[f"editing_st_{st_type['component_id']}"] = True
-                    st.rerun()
-            with col3:
-                if st.button("🗑️", key=f"delete_st_{st_type['component_id']}", help="완전삭제", use_container_width=True):
-                    if config_manager.delete_hr_component_permanently(st_type['component_id']):
-                        st.success("Category A-1이 완전 삭제되었습니다!")
-                        st.rerun()
-            
-            # 수정 폼 표시
-            if st.session_state.get(f"editing_st_{st_type['component_id']}", False):
-                with st.expander("✏️ Category A-1 수정", expanded=True):
-                    with st.form(f"edit_system_type_{st_type['component_id']}"):
-                        new_key = st.text_input("키", value=st_type['component_key'])
-                        new_description = st.text_input("제품명", value=st_type['description'] or "")
-                        
-                        col_submit, col_cancel = st.columns([1, 1])
-                        with col_submit:
-                            if st.form_submit_button("💾 저장"):
-                                if config_manager.update_hr_component(
-                                    st_type['component_id'], component_key=new_key, 
-                                    component_name=new_key, description=new_description
-                                ):
-                                    st.success("Category A-1이 수정되었습니다!")
-                                    del st.session_state[f"editing_st_{st_type['component_id']}"]
-                                    st.rerun()
-                                else:
-                                    st.error("수정 중 오류가 발생했습니다.")
-                        with col_cancel:
-                            if st.form_submit_button("❌ 취소"):
-                                del st.session_state[f"editing_st_{st_type['component_id']}"]
-                                st.rerun()
-    
-    # 새 Category A-1 추가
-    with st.expander("➕ 새 Category A-1 추가"):
-        with st.form("add_system_type"):
-            new_key = st.text_input("키", placeholder="예: Coil")
-            new_description = st.text_input("제품명", placeholder="예: 코일형 핫러너 시스템")
-            
-            if st.form_submit_button("➕ Category A-1 추가"):
-                if new_key:
-                    success = config_manager.add_hr_component(
-                        'system_type', None, new_key, new_key, None, None, new_description
-                    )
-                    if success:
-                        st.success(f"Category A-1 '{new_key}'가 추가되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error("Category A-1 추가 중 오류가 발생했습니다. (중복된 키일 수 있습니다)")
-                else:
-                    st.warning("키는 필수입니다.")
-
-def manage_hr_product_types(config_manager):
-    """Category A-2 (Code)"""
-    st.subheader("📋 Category A-2 (Code)")
-    
-    # Category A-1 선택
-    system_types = config_manager.get_hr_system_types()
-    
-    if not system_types:
-        st.warning("먼저 Category A-1을 등록해주세요.")
-        return
-    
-    selected_system = st.selectbox("Category A-1 선택", [""] + system_types)
-    
-    if selected_system:
-        # 선택된 Category A-1의 Category A-2 목록
-        product_types = config_manager.get_hr_components_for_management('product_type')
-        filtered_types = [pt for pt in product_types if pt['parent_component'] == selected_system and pt['is_active']]
-        
-        if filtered_types:
-            st.write(f"**{selected_system}의 Category A-2:**")
-            for pt in filtered_types:
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.write(f"• **{pt['component_key']}** - {pt['component_name']}")
-                    if pt['description']:
-                        st.caption(pt['description'])
-                with col2:
-                    if st.button("✏️", key=f"edit_pt_{pt['component_id']}", help="수정", use_container_width=True):
-                        st.session_state[f"editing_pt_{pt['component_id']}"] = True
-                        st.rerun()
-                with col3:
-                    if st.button("🗑️", key=f"delete_pt_{pt['component_id']}", help="삭제", use_container_width=True):
-                        if config_manager.delete_hr_component_permanently(pt['component_id']):
-                            st.success("Category A-2가 완전 삭제되었습니다!")
-                            st.rerun()
-                
-                # 수정 폼 표시
-                if st.session_state.get(f"editing_pt_{pt['component_id']}", False):
-                    with st.expander("✏️ Category A-2 수정", expanded=True):
-                        with st.form(f"edit_product_type_{pt['component_id']}"):
-                            new_key = st.text_input("키", value=pt['component_key'])
-                            new_description = st.text_input("제품명", value=pt['description'] or "")
-                            
-                            col_submit, col_cancel = st.columns([1, 1])
-                            with col_submit:
-                                if st.form_submit_button("💾 저장"):
-                                    if config_manager.update_hr_component(
-                                        pt['component_id'], component_key=new_key, 
-                                        component_name=new_key, description=new_description
-                                    ):
-                                        st.success("Category A-2가 수정되었습니다!")
-                                        del st.session_state[f"editing_pt_{pt['component_id']}"]
-                                        st.rerun()
-                                    else:
-                                        st.error("수정 중 오류가 발생했습니다.")
-                            with col_cancel:
-                                if st.form_submit_button("❌ 취소"):
-                                    del st.session_state[f"editing_pt_{pt['component_id']}"]
-                                    st.rerun()
-        
-        # 새 Product Type 추가
-        with st.expander(f"➕ {selected_system}에 새 Category A-2 추가"):
-            with st.form(f"add_product_type_{selected_system}"):
-                new_key = st.text_input("키", placeholder="예: ST")
-                new_description = st.text_input("제품명", placeholder="예: 표준형 제품")
-                
-                if st.form_submit_button("➕ Category A-2 추가"):
-                    if new_key:
-                        success = config_manager.add_hr_component(
-                            'product_type', selected_system, new_key, new_key, 
-                            None, None, new_description
-                        )
-                        if success:
-                            st.success(f"Category A-2 '{new_key}'가 추가되었습니다!")
-                            st.rerun()
-                        else:
-                            st.error("Category A-2 추가 중 오류가 발생했습니다.")
-                    else:
-                        st.warning("키는 필수입니다.")
-
-def manage_hr_gate_types(config_manager):
-    """Category A-3 (Code)"""
-    st.subheader("🚪 Category A-3 (Code)")
-    
-    # Category A-1과 Category A-2 선택
-    system_types = config_manager.get_hr_system_types()
-    
-    if not system_types:
-        st.warning("먼저 Category A-1을 등록해주세요.")
-        return
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        selected_system = st.selectbox("Category A-1", [""] + system_types, key="gate_system")
-    
-    with col2:
-        if selected_system:
-            product_types = config_manager.get_hr_product_types(selected_system)
-            selected_product = st.selectbox("Category A-2", [""] + product_types, key="gate_product")
-        else:
-            selected_product = None
-    
-    if selected_system and selected_product:
-        parent_key = f"{selected_system}-{selected_product}"
-        
-        # Gate Type 목록 표시
-        gate_types = config_manager.get_hr_components_for_management('gate_type')
-        filtered_gates = [gt for gt in gate_types if gt['parent_component'] == parent_key and gt['is_active']]
-        
-        if filtered_gates:
-            st.write(f"**{selected_system}-{selected_product}의 Category A-3:**")
-            for gt in filtered_gates:
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.write(f"• **{gt['component_key']}** - {gt['component_name']}")
-                    if gt['description']:
-                        st.caption(gt['description'])
-                with col2:
-                    if st.button("✏️", key=f"edit_gt_{gt['component_id']}", help="수정", use_container_width=True):
-                        st.session_state[f"editing_gt_{gt['component_id']}"] = True
-                        st.rerun()
-                with col3:
-                    if st.button("🗑️", key=f"delete_gt_{gt['component_id']}", help="삭제", use_container_width=True):
-                        if config_manager.delete_hr_component_permanently(gt['component_id']):
-                            st.success("Category A-3이 완전 삭제되었습니다!")
-                            st.rerun()
-                
-                # 수정 폼 표시
-                if st.session_state.get(f"editing_gt_{gt['component_id']}", False):
-                    with st.expander("✏️ Category A-3 수정", expanded=True):
-                        with st.form(f"edit_gate_type_{gt['component_id']}"):
-                            new_key = st.text_input("키", value=gt['component_key'])
-                            new_description = st.text_input("제품명", value=gt['description'] or "")
-                            
-                            col_submit, col_cancel = st.columns([1, 1])
-                            with col_submit:
-                                if st.form_submit_button("💾 저장"):
-                                    if config_manager.update_hr_component(
-                                        gt['component_id'], component_key=new_key, 
-                                        component_name=new_key, description=new_description
-                                    ):
-                                        st.success("Category A-3이 수정되었습니다!")
-                                        del st.session_state[f"editing_gt_{gt['component_id']}"]
-                                        st.rerun()
-                                    else:
-                                        st.error("수정 중 오류가 발생했습니다.")
-                            with col_cancel:
-                                if st.form_submit_button("❌ 취소"):
-                                    del st.session_state[f"editing_gt_{gt['component_id']}"]
-                                    st.rerun()
-        
-        # 새 Gate Type 추가
-        with st.expander(f"➕ {parent_key}에 새 Category A-3 추가"):
-            # 고유한 폼 키 사용
-            form_key = f"add_gate_type_{parent_key.replace('-', '_')}"
-            with st.form(form_key):
-                new_key = st.text_input("키", placeholder="예: MAE", key=f"gt_key_{parent_key}")
-                new_description = st.text_input("제품명", placeholder="예: MAE 타입 게이트", key=f"gt_desc_{parent_key}")
-                
-                if st.form_submit_button("➕ Category A-3 추가"):
-                    if new_key.strip():
-                        try:
-                            success = config_manager.add_hr_component(
-                                'gate_type', parent_key, new_key.strip(), new_key.strip(), 
-                                None, None, new_description.strip() if new_description else None
-                            )
-                            if success:
-                                st.success(f"✅ Category A-3 '{new_key}'가 추가되었습니다!")
-                                # 세션 상태 초기화로 새로고침 효과
-                                if 'gate_type_refresh' in st.session_state:
-                                    del st.session_state['gate_type_refresh']
-                                st.rerun()
-                            else:
-                                st.error("❌ Category A-3 추가 중 오류가 발생했습니다. (중복된 키일 수 있습니다)")
-                        except Exception as e:
-                            st.error(f"❌ 오류: {str(e)}")
-                    else:
-                        st.warning("⚠️ 키는 필수입니다.")
-
-def manage_hr_sizes(config_manager):
-    """Category A-4 (Code)"""
-    st.subheader("📏 Category A-4 (Code)")
-    
-    # Category A-1과 Category A-2 선택
-    system_types = config_manager.get_hr_system_types()
-    
-    if not system_types:
-        st.warning("먼저 Category A-1을 등록해주세요.")
-        return
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        selected_system = st.selectbox("Category A-1", [""] + system_types, key="size_system")
-    
-    with col2:
-        if selected_system:
-            product_types = config_manager.get_hr_product_types(selected_system)
-            selected_product = st.selectbox("Category A-2", [""] + product_types, key="size_product")
-        else:
-            selected_product = None
-    
-    with col3:
-        if selected_system and selected_product:
-            gate_types = config_manager.get_hr_gate_types(selected_system, selected_product)
-            selected_gate = st.selectbox("Category A-3", [""] + gate_types, key="size_gate")
-        else:
-            selected_gate = None
-    
-    if selected_system and selected_product and selected_gate:
-        parent_key = f"{selected_system}-{selected_product}-{selected_gate}"
-        
-        # Size 목록 표시
-        sizes = config_manager.get_hr_components_for_management('size')
-        filtered_sizes = [sz for sz in sizes if sz['parent_component'] == parent_key and sz['is_active']]
-        
-        if filtered_sizes:
-            st.write(f"**{selected_system}-{selected_product}-{selected_gate}의 Category A-4:**")
-            for sz in filtered_sizes:
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.write(f"• **{sz['component_key']}** - {sz['component_name']}")
-                    if sz['description']:
-                        st.caption(sz['description'])
-                with col2:
-                    if st.button("✏️", key=f"edit_sz_{sz['component_id']}", help="수정", use_container_width=True):
-                        st.session_state[f"editing_sz_{sz['component_id']}"] = True
-                        st.rerun()
-                with col3:
-                    if st.button("🗑️", key=f"delete_sz_{sz['component_id']}", help="삭제", use_container_width=True):
-                        if config_manager.delete_hr_component_permanently(sz['component_id']):
-                            st.success("Category A-4가 완전 삭제되었습니다!")
-                            st.rerun()
-                
-                # 수정 폼 표시
-                if st.session_state.get(f"editing_sz_{sz['component_id']}", False):
-                    with st.expander("✏️ Category A-4 수정", expanded=True):
-                        with st.form(f"edit_size_{sz['component_id']}"):
-                            new_key = st.text_input("키", value=sz['component_key'])
-                            new_description = st.text_input("제품명", value=sz['description'] or "")
-                            
-                            col_submit, col_cancel = st.columns([1, 1])
-                            with col_submit:
-                                if st.form_submit_button("💾 저장"):
-                                    old_size = sz['component_key']
-                                    
-                                    if config_manager.update_hr_component(
-                                        sz['component_id'], component_key=new_key, 
-                                        component_name=new_key, description=new_description
-                                    ):
-                                        st.success("Category A-4가 수정되었습니다!")
-                                        
-                                        # Category A-4 변경 시 관련 제품들 자동 업데이트
-                                        if old_size != new_key:
-                                            st.info(f"🔄 Category A-4 변경 감지: {old_size} → {new_key}")
-                                            postgres_manager = BasePostgreSQLManager()
-                                            conn = None
-                                            try:
-                                                from managers.sqlite.sqlite_master_product_manager import SQLiteMasterProductManager
-                                                master_manager = SQLiteMasterProductManager()
-                                                
-                                                # parent_key에서 System Type, Product Type, Gate Type 추출
-                                                parts = parent_key.split('-')
-                                                st.info(f"📋 Parent Key 분석: {parent_key} → {parts}")
-                                                
-                                                if len(parts) == 3:
-                                                    system_type, product_type, gate_type = parts
-                                                    
-                                                    # System Type 코드 변환
-                                                    system_type_code = ""
-                                                    if system_type == "Valve":
-                                                        system_type_code = "VV"
-                                                    elif system_type == "Open":
-                                                        system_type_code = "OP"
-                                                    else:
-                                                        system_type_code = system_type[:2].upper()
-                                                    
-                                                    # 기존 및 새로운 제품 코드
-                                                    old_product_code = f"HR-{system_type_code}-{product_type}-{gate_type}-{old_size}"
-                                                    new_product_code = f"HR-{system_type_code}-{product_type}-{gate_type}-{new_key}"
-                                                    
-                                                    st.info(f"🎯 제품 코드 변환: {old_product_code} → {new_product_code}")
-                                                    
-                                                    # 기존 제품 조회
-                                                    conn = postgres_manager.get_connection()
-                                                    cursor = conn.cursor()
-                                                    
-                                                    cursor.execute("SELECT * FROM master_products WHERE product_code = %s", (old_product_code,))
-                                                    existing_product = cursor.fetchone()
-                                                    
-                                                    if existing_product:
-                                                        st.info(f"✅ 기존 제품 발견: {old_product_code}")
-                                                        
-                                                        # 새로운 제품명 생성
-                                                        korean_base = "핫러너 밸브" if system_type == "Valve" else f"핫러너 {system_type}"
-                                                        new_korean_name = f"{korean_base} {product_type} {gate_type} {new_key}mm"
-                                                        new_english_name = f"Hot Runner {system_type} {product_type} {gate_type} {new_key}mm"
-                                                        
-                                                        # 제품 정보 업데이트
-                                                        cursor.execute('''
-                                                            UPDATE master_products 
-                                                            SET product_code = %s, product_name = %s, product_name_en = %s, product_name_vi = %s, updated_date = NOW()
-                                                            WHERE product_code = %s
-                                                        ''', (new_product_code, new_korean_name, new_english_name, new_english_name, old_product_code))
-                                                        
-                                                        updated_count = cursor.rowcount
-                                                        conn.commit()
-                                                        
-                                                        if updated_count > 0:
-                                                            st.success(f"🎯 **제품 자동 업데이트 완료!** `{old_product_code}` → `{new_product_code}`")
-                                                        else:
-                                                            st.warning(f"⚠️ 제품 업데이트 실패: {old_product_code}")
-                                                    else:
-                                                        st.warning(f"⚠️ 기존 제품을 찾을 수 없음: {old_product_code}")
-                                                else:
-                                                    st.error(f"❌ Parent Key 형식 오류: {parent_key}")
-                                                        
-                                            except Exception as e:
-                                                st.error(f"❌ 제품 자동 업데이트 오류: {str(e)}")
-                                                import traceback
-                                                st.code(traceback.format_exc())
-                                            finally:
-                                                if conn and postgres_manager:
-                                                    postgres_manager.close_connection(conn)
-                                        
-                                        del st.session_state[f"editing_sz_{sz['component_id']}"]
-                                        st.rerun()
-                                    else:
-                                        st.error("수정 중 오류가 발생했습니다.")
-                            with col_cancel:
-                                if st.form_submit_button("❌ 취소"):
-                                    del st.session_state[f"editing_sz_{sz['component_id']}"]
-                                    st.rerun()
-        
-        
-        # 새 Category A-4 추가
-        with st.expander(f"➕ {selected_system}-{selected_product}-{selected_gate}에 새 Category A-4 추가"):
-            # 폼 리셋을 위한 동적 키 생성
-            form_key = f"add_size_{parent_key.replace('-', '_')}_{len(filtered_sizes)}"
-            with st.form(form_key):
-                new_key = st.text_input("키", placeholder="예: 20")
-                new_description = st.text_input("제품명", placeholder="예: 20mm Category A-4")
-                
-                if st.form_submit_button("➕ Category A-4 추가"):
-                    if new_key:
-                        try:
-                            st.info(f"🔄 추가 시도: '{new_key}' (parent: {parent_key})")
-                            success = config_manager.add_hr_component(
-                                'size', parent_key, new_key, new_key, 
-                                None, None, new_description
-                            )
-                            if success:
-                                st.success(f"✅ Category A-4 '{new_key}'가 추가되었습니다!")
-                                
-                                # 제품 코드 자동 생성 및 등록
-                                try:
-                                    # parent_key에서 System Type, Product Type, Gate Type 추출
-                                    parts = parent_key.split('-')
-                                    if len(parts) == 3:
-                                        system_type, product_type, gate_type = parts
-                                        
-                                        # System Type 코드 변환
-                                        system_type_code = ""
-                                        if system_type == "Valve":
-                                            system_type_code = "VV"
-                                        elif system_type == "Open":
-                                            system_type_code = "OP"
-                                        else:
-                                            system_type_code = system_type[:2].upper()
-                                        
-                                        # 제품 코드 생성
-                                        generated_code = f"HR-{system_type_code}-{product_type}-{gate_type}-{new_key}"
-                                        
-                                        # master_products에 자동 등록
-                                        from managers.sqlite.sqlite_master_product_manager import SQLiteMasterProductManager
-                                        master_manager = SQLiteMasterProductManager()
-                                        
-                                        # 중복 체크
-                                        existing_product = master_manager.get_product_by_code(generated_code)
-                                        if not existing_product:
-                                            import uuid
-                                            import time
-                                            timestamp = str(int(time.time()))[-6:]
-                                            product_count = str(len(master_manager.get_all_products()) + 1).zfill(3)
-                                            master_product_id = f"MP-HR-{timestamp}-{product_count}"
-                                        
-                                            # 기본 제품명 생성
-                                            korean_base = "핫러너 밸브" if system_type == "Valve" else f"핫러너 {system_type}"
-                                            default_korean = f"{korean_base} {product_type} {gate_type} {new_key}mm"
-                                            default_english = f"Hot Runner {system_type} {product_type} {gate_type} {new_key}mm"
-                                        
-                                            product_data = {
-                                                'master_product_id': master_product_id,
-                                                'product_code': generated_code,
-                                                'product_name': default_korean,
-                                                'product_name_en': default_english,
-                                                'product_name_vi': default_english,
-                                                'category_name': 'HR',
-                                                'subcategory_name': product_type,
-                                                'supplier_name': '',
-                                                'specifications': 'H30,34,1.0',
-                                                'unit': 'EA',
-                                                'status': 'active'
-                                            }
-                                            
-                                            result = master_manager.add_master_product(product_data)
-                                            if result:
-                                                st.success(f"🎯 **제품 코드 자동 생성:** `{generated_code}`")
-                                                st.info("📋 HR 카테고리 목록에서 확인할 수 있습니다.")
-                                            else:
-                                                st.warning(f"⚠️ Category A-4는 추가되었지만 제품 코드 생성 실패: `{generated_code}`")
-                                        else:
-                                            st.info(f"ℹ️ 제품 코드 `{generated_code}`는 이미 존재합니다.")
-                                        
-                                except Exception as e:
-                                    st.warning(f"⚠️ Category A-4는 추가되었지만 제품 코드 자동 생성 중 오류: {e}")
-                                
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Category A-4 '{new_key}' 추가 실패")
-                        except Exception as e:
-                            st.error(f"❌ 오류 발생: {str(e)}")
-                            import traceback
-                            st.code(traceback.format_exc())
-                    else:
-                        st.warning("키는 필수입니다.")
-
-
-def manage_hr_level5_components(config_manager):
-    """Category A-5 (Code)"""
-    st.subheader("🔩 Category A-5 (Code)")
-    
-    # A-1~A-4 가로 배치 선택
-    system_types = config_manager.get_hr_system_types()
-    if not system_types:
-        st.warning("먼저 Category A-1을 등록해주세요.")
-        return
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        selected_system = st.selectbox("Category A-1", [""] + system_types, key="a5_system")
-    
-    with col2:
-        if selected_system:
-            product_types = config_manager.get_hr_product_types(selected_system)
-            selected_product = st.selectbox("Category A-2", [""] + product_types, key="a5_product")
-        else:
-            selected_product = None
-    
-    with col3:
-        if selected_system and selected_product:
-            gate_types = config_manager.get_hr_gate_types(selected_system, selected_product)
-            selected_gate = st.selectbox("Category A-3", [""] + gate_types, key="a5_gate")
-        else:
-            selected_gate = None
-            
-    with col4:
-        if selected_system and selected_product and selected_gate:
-            sizes = config_manager.get_hr_sizes(selected_system, selected_product, selected_gate)
-            selected_size = st.selectbox("Category A-4", [""] + sizes, key="a5_size")
-        else:
-            selected_size = None
-    
-    if not (selected_system and selected_product and selected_gate and selected_size):
-        return
-    
-    # 현재 선택된 조합의 A-5 목록
-    parent_key = f"{selected_system}-{selected_product}-{selected_gate}-{selected_size}"
-    level5_components = config_manager.get_hr_components_for_management('level5')
-    filtered_level5 = [l5 for l5 in level5_components if l5.get('parent_component') == parent_key]
-    
-    if filtered_level5:
-        st.write(f"**{parent_key}의 Category A-5:**")
-        for l5 in filtered_level5:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                component_key = l5['component_key']
-                description = l5.get('description', l5['component_name'])
-                st.write(f"🔩 **{component_key}** - {description}")
-            with col2:
-                component_id = l5['component_id']
-                if st.button("✏️", key=f"edit_l5_{component_id}", help="수정"):
-                    st.session_state[f"editing_l5_{component_id}"] = True
-            with col3:
-                component_id = l5['component_id']
-                if st.button("🗑️", key=f"delete_l5_{component_id}", help="완전삭제"):
-                    if config_manager.delete_hr_component_permanently(l5['component_id']):
-                        st.success("Category A-5가 완전 삭제되었습니다!")
-                        st.rerun()
-            
-            # 수정 폼 표시
-            if st.session_state.get(f"editing_l5_{component_id}", False):
-                with st.expander("✏️ Category A-5 수정", expanded=True):
-                    with st.form(f"edit_level5_{component_id}"):
-                        new_key = st.text_input("키", value=l5['component_key'])
-                        new_description = st.text_input("제품명", value=l5.get('description', ''))
-                        
-                        col_save, col_cancel = st.columns(2)
-                        with col_save:
-                            if st.form_submit_button("💾 저장"):
-                                if config_manager.update_hr_component(
-                                    l5['component_id'], new_key, new_key, 
-                                    None, None, new_description
-                                ):
-                                    st.success("Category A-5가 수정되었습니다!")
-                                    del st.session_state[f"editing_l5_{component_id}"]
-                                    st.rerun()
-                                else:
-                                    st.error("수정 중 오류가 발생했습니다.")
-                        with col_cancel:
-                            if st.form_submit_button("❌ 취소"):
-                                del st.session_state[f"editing_l5_{component_id}"]
-                                st.rerun()
-    
-    # 새 A-5 추가
-    with st.expander(f"➕ {parent_key}에 새 Category A-5 추가"):
-        # 폼 리셋을 위한 동적 키 생성
-        form_key = f"add_level5_{parent_key.replace('-', '_')}_{len(filtered_level5)}"
-        with st.form(form_key):
-            new_key = st.text_input("키", placeholder="예: TYPE1")
-            new_description = st.text_input("제품명", placeholder="예: 타입1 Category A-5")
-            
-            if st.form_submit_button("➕ Category A-5 추가"):
-                if new_key:
-                    success = config_manager.add_hr_component(
-                        'level5', parent_key, new_key, new_key, 
-                        None, None, new_description
-                    )
-                    if success:
-                        st.success(f"✅ Category A-5 '{new_key}'가 추가되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Category A-5 '{new_key}' 추가 실패")
-                else:
-                    st.warning("키는 필수입니다.")
-
-def manage_hr_level6_components(config_manager):
-    """Category A-6 (Code)"""
-    st.subheader("⚙️ Category A-6 (Code)")
-    
-    # A-1~A-5 가로 배치 선택
-    system_types = config_manager.get_hr_system_types()
-    if not system_types:
-        st.warning("먼저 Category A-1을 등록해주세요.")
-        return
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        selected_system = st.selectbox("Category A-1", [""] + system_types, key="a6_system")
-    
-    with col2:
-        if selected_system:
-            product_types = config_manager.get_hr_product_types(selected_system)
-            selected_product = st.selectbox("Category A-2", [""] + product_types, key="a6_product")
-        else:
-            selected_product = None
-    
-    with col3:
-        if selected_system and selected_product:
-            gate_types = config_manager.get_hr_gate_types(selected_system, selected_product)
-            selected_gate = st.selectbox("Category A-3", [""] + gate_types, key="a6_gate")
-        else:
-            selected_gate = None
-            
-    with col4:
-        if selected_system and selected_product and selected_gate:
-            sizes = config_manager.get_hr_sizes(selected_system, selected_product, selected_gate)
-            selected_size = st.selectbox("Category A-4", [""] + sizes, key="a6_size")
-        else:
-            selected_size = None
-    
-    with col5:
-        if selected_system and selected_product and selected_gate and selected_size:
-            level5_components = config_manager.get_hr_components_for_management('level5')
-            level5_parent_key = f"{selected_system}-{selected_product}-{selected_gate}-{selected_size}"
-            filtered_level5 = [l5 for l5 in level5_components if l5.get('parent_component') == level5_parent_key]
-            level5_keys = [l5['component_key'] for l5 in filtered_level5]
-            selected_level5 = st.selectbox("Category A-5", [""] + level5_keys, key="a6_level5") if level5_keys else None
-        else:
-            selected_level5 = None
-    
-    if not (selected_system and selected_product and selected_gate and selected_size and selected_level5):
-        return
-    
-    # 현재 선택된 조합의 A-6 목록
-    parent_key = f"{selected_system}-{selected_product}-{selected_gate}-{selected_size}-{selected_level5}"
-    level6_components = config_manager.get_hr_components_for_management('level6')
-    filtered_level6 = [l6 for l6 in level6_components if l6.get('parent_component') == parent_key]
-    
-    if filtered_level6:
-        st.write(f"**{parent_key}의 Category A-6:**")
-        for l6 in filtered_level6:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                component_key = l6['component_key']
-                description = l6.get('description', l6['component_name'])
-                st.write(f"⚙️ **{component_key}** - {description}")
-            with col2:
-                component_id = l6['component_id']
-                if st.button("✏️", key=f"edit_l6_{component_id}", help="수정"):
-                    st.session_state[f"editing_l6_{component_id}"] = True
-            with col3:
-                component_id = l6['component_id']
-                if st.button("🗑️", key=f"delete_l6_{component_id}", help="완전삭제"):
-                    if config_manager.delete_hr_component_permanently(l6['component_id']):
-                        st.success("Category A-6이 완전 삭제되었습니다!")
-                        st.rerun()
-            
-            # 수정 폼 표시
-            if st.session_state.get(f"editing_l6_{component_id}", False):
-                with st.expander("✏️ Category A-6 수정", expanded=True):
-                    with st.form(f"edit_level6_{component_id}"):
-                        new_key = st.text_input("키", value=l6['component_key'])
-                        new_description = st.text_input("제품명", value=l6.get('description', ''))
-                        
-                        col_save, col_cancel = st.columns(2)
-                        with col_save:
-                            if st.form_submit_button("💾 저장"):
-                                if config_manager.update_hr_component(
-                                    l6['component_id'], new_key, new_key, 
-                                    None, None, new_description
-                                ):
-                                    st.success("Category A-6이 수정되었습니다!")
-                                    del st.session_state[f"editing_l6_{component_id}"]
-                                    st.rerun()
-                                else:
-                                    st.error("수정 중 오류가 발생했습니다.")
-                        with col_cancel:
-                            if st.form_submit_button("❌ 취소"):
-                                del st.session_state[f"editing_l6_{component_id}"]
-                                st.rerun()
-    
-    # 새 A-6 추가
-    with st.expander(f"➕ {parent_key}에 새 Category A-6 추가"):
-        # 폼 리셋을 위한 동적 키 생성
-        form_key = f"add_level6_{parent_key.replace('-', '_')}_{len(filtered_level6)}"
-        with st.form(form_key):
-            new_key = st.text_input("키", placeholder="예: SUB1")
-            new_description = st.text_input("제품명", placeholder="예: 서브타입1 Category A-6")
-            
-            if st.form_submit_button("➕ Category A-6 추가"):
-                if new_key:
-                    success = config_manager.add_hr_component(
-                        'level6', parent_key, new_key, new_key, 
-                        None, None, new_description
-                    )
-                    if success:
-                        st.success(f"✅ Category A-6 '{new_key}'가 추가되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Category A-6 '{new_key}' 추가 실패")
-                else:
-                    st.warning("키는 필수입니다.")
 
 def manage_general_category(multi_manager, category_type):
-    """Category B~G 구성 요소 관리 (Category A와 완전히 동일한 구조)"""
+    """Category A~I 구성 요소 관리 (모든 카테고리 동일한 구조)"""
     st.subheader(f"🏗️ Category {category_type}")
     
-    # 세션 상태 초기화 (Category A와 동일)
+    # 세션 상태 초기화
     if f'{category_type.lower()}_component_tab' in st.session_state:
         del st.session_state[f'{category_type.lower()}_component_tab']
     if f'{category_type.lower()}_settings_tab' in st.session_state:
         del st.session_state[f'{category_type.lower()}_settings_tab']
     
-    # Category 구성 요소 관리 탭 (Category A와 완전히 동일한 6단계)
+    # Category 구성 요소 관리 탭 (모든 카테고리 동일한 6단계)
     hr_tabs = st.tabs([
         f"🔧 Category {category_type}-1 (Product)", 
         f"📋 Category {category_type}-2 (Code)", 
@@ -1895,7 +916,7 @@ def manage_general_category(multi_manager, category_type):
         manage_multi_category_level(multi_manager, category_type, 'level6', f"Category {category_type}-6 (Code)", "⚙️")
 
 def manage_multi_category_level(multi_manager, category_type, level, title, icon):
-    """Multi-Category Level 관리 (Category A와 동일한 패턴)"""
+    """Multi-Category Level 관리 (모든 카테고리 동일한 패턴)"""
     st.subheader(f"{icon} {title}")
     
     # Level에 따른 부모 선택 로직
@@ -2041,11 +1062,11 @@ def get_parent_level(level):
 def get_level_number(level):
     """레벨 번호 반환"""
     level_map = {
-        'level1': '1',
-        'level2': '2',
-        'level3': '3',
-        'level4': '4',
-        'level5': '5',
-        'level6': '6'
+        'level1': 1,
+        'level2': 2,
+        'level3': 3,
+        'level4': 4,
+        'level5': 5,
+        'level6': 6
     }
-    return level_map.get(level)
+    return level_map.get(level, 1)
