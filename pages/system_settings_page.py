@@ -10,7 +10,20 @@ from managers.legacy.multi_category_manager import MultiCategoryManager
 # 기존 import들 아래에 추가
 from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
 
-def show_system_settings_page(config_manager, get_text, hide_header=False, managers=None):
+def get_db_connection():
+    """데이터베이스 연결 재사용"""
+    if 'db_connection' not in st.session_state:
+        postgres_manager = BasePostgreSQLManager()
+        st.session_state.db_connection = postgres_manager.get_connection()
+        st.session_state.postgres_manager = postgres_manager
+    return st.session_state.db_connection
+
+def close_db_connection():
+    """세션 종료 시 연결 정리"""
+    if 'db_connection' in st.session_state:
+        st.session_state.postgres_manager.close_connection(st.session_state.db_connection)
+        del st.session_state.db_connection
+        del st.session_state.postgres_manager
     """시스템 설정 메인 페이지"""
     
     # 메인 컨텐츠 영역만 영향을 주는 레이아웃 설정
@@ -491,15 +504,13 @@ def show_csv_upload_section():
             st.error(f"파일 읽기 오류: {str(e)}")
 
 def download_category_csv(category):
-    """특정 카테고리 CSV 다운로드"""
-    postgres_manager = BasePostgreSQLManager()
-    conn = None
+    """특정 카테고리 CSV 다운로드 - 최적화"""
     try:
         import pandas as pd
         from datetime import datetime
         import io
         
-        conn = postgres_manager.get_connection()
+        conn = get_db_connection()  # 재사용 연결
         
         # 모든 카테고리가 multi_category_components 테이블 사용 (통일됨)
         query = """
@@ -535,9 +546,6 @@ def download_category_csv(category):
         
     except Exception as e:
         st.error(f"다운로드 오류: {str(e)}")
-    finally:
-        if conn and postgres_manager:
-            postgres_manager.close_connection(conn)
 
 def download_all_categories():
     """모든 카테고리 ZIP 파일로 다운로드"""
@@ -987,9 +995,9 @@ def select_parent_hierarchy(multi_manager, category_type, target_level):
     return selected_parents
 
 def manage_level_components(multi_manager, category_type, level, parent_component, title, icon):
-    """레벨 구성 요소 관리"""
-    # 기존 구성 요소들 표시
-    components = multi_manager.get_components_by_level(category_type, level, parent_component)
+    """레벨 구성 요소 관리 - 성능 최적화"""
+    # 캐시된 데이터 사용
+    components = get_components_cached(category_type, level, parent_component)
     
     if components:
         parent_display = f" ({parent_component})" if parent_component else ""
@@ -1006,6 +1014,7 @@ def manage_level_components(multi_manager, category_type, level, parent_componen
             with col3:
                 if st.button("🗑️", key=f"delete_{category_type}_{level}_{component_id}_{comp['component_key']}", help="완전삭제"):
                     if multi_manager.delete_component_permanently(comp['component_id']):
+                        clear_component_cache()  # 캐시 초기화
                         st.success(f"{title}이 완전 삭제되었습니다!")
                         st.rerun()
             
@@ -1020,6 +1029,7 @@ def manage_level_components(multi_manager, category_type, level, parent_componen
                         with col_save:
                             if st.form_submit_button("💾 저장"):
                                 if multi_manager.update_component(comp['component_id'], new_key, new_key, new_description):
+                                    clear_component_cache()  # 캐시 초기화
                                     st.success(f"{title}이 수정되었습니다!")
                                     del st.session_state[f"editing_{category_type}_{level}_{component_id}"]
                                     st.rerun()
@@ -1030,7 +1040,7 @@ def manage_level_components(multi_manager, category_type, level, parent_componen
                                 del st.session_state[f"editing_{category_type}_{level}_{component_id}"]
                                 st.rerun()
     
-    # 새 구성 요소 추가
+    # 새 구성 요소 추가 - 성능 개선
     parent_display = f" {parent_component}에" if parent_component else ""
     with st.expander(f"➕{parent_display} 새 {title} 추가"):
         form_key = f"add_{category_type}_{level}_{parent_component or 'root'}"
@@ -1040,11 +1050,15 @@ def manage_level_components(multi_manager, category_type, level, parent_componen
             
             if st.form_submit_button(f"➕ {title} 추가"):
                 if new_key:
-                    if multi_manager.add_component(category_type, level, parent_component, new_key, new_key, new_description):
-                        st.success(f"✅ {title} '{new_key}'가 추가되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {title} '{new_key}' 추가 실패")
+                    with st.spinner(f"{title} 추가 중..."):  # 로딩 인디케이터 추가
+                        if multi_manager.add_component(category_type, level, parent_component, new_key, new_key, new_description):
+                            clear_component_cache()  # 캐시 초기화
+                            st.success(f"✅ {title} '{new_key}'가 추가되었습니다!")
+                            # 부분 새로고침을 위한 세션 상태 업데이트
+                            st.session_state[f"refresh_{category_type}_{level}"] = True
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {title} '{new_key}' 추가 실패")
                 else:
                     st.warning("키는 필수입니다.")
 
