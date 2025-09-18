@@ -14,15 +14,16 @@ from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
 
 # ============== 성능 최적화 함수들 ==============
 
-@st.cache_resource
-def get_connection_pool():
-    """연결 풀 생성 - 재사용"""
-    return BasePostgreSQLManager()
-
 def get_optimized_db_connection():
-    """최적화된 DB 연결"""
-    pool = get_connection_pool()
-    return pool.get_connection()
+    """최적화된 DB 연결 - 타임아웃 해결"""
+    try:
+        # 직접 연결 생성 (풀링 대신)
+        postgres_manager = BasePostgreSQLManager()
+        return postgres_manager.get_connection()
+    except Exception as e:
+        st.error(f"DB 연결 오류: {e}")
+        # 폴백: 기존 방식 사용
+        return get_db_connection()
 
 @st.cache_data(ttl=300)  # 5분 캐시
 def get_components_cached(category_type, level, parent_component=None):
@@ -40,9 +41,9 @@ def clear_component_cache():
         get_components_cached.clear()
 
 def get_components_fast(category_type, level, parent_component=None):
-    """빠른 컴포넌트 조회 - 인덱스 활용"""
-    conn = get_optimized_db_connection()
+    """빠른 컴포넌트 조회 - 인덱스 활용 (연결 오류 해결)"""
     try:
+        conn = get_optimized_db_connection()
         cursor = conn.cursor()
         
         # 인덱스를 활용한 최적화된 쿼리
@@ -85,11 +86,20 @@ def get_components_fast(category_type, level, parent_component=None):
         return components
         
     except Exception as e:
-        st.error(f"빠른 조회 오류: {e}")
-        return []
+        st.warning(f"빠른 조회 실패, 기본 방식 사용: {e}")
+        # 폴백: 기존 방식으로 조회
+        try:
+            multi_manager = MultiCategoryManager()
+            return multi_manager.get_components_by_level(category_type, level, parent_component)
+        except Exception as e2:
+            st.error(f"조회 실패: {e2}")
+            return []
     finally:
-        if conn:
-            conn.close()
+        if 'conn' in locals() and conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 def performance_monitor(func):
     """성능 모니터링 데코레이터"""
