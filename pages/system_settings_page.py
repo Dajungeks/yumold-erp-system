@@ -467,16 +467,9 @@ def show_level_components(category_type, level):
     st.write("🔥 테스트: 이 메시지가 보이면 코드가 실행되고 있습니다!")  # 👈 이 줄 추가
     
     with st.form(f"add_component_{category_type}_{level}"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            new_code = st.text_input("컴포넌트 코드*", key=f"code_{category_type}_{level}")
-            name_ko = st.text_input("한국어명*", key=f"ko_{category_type}_{level}")
-            
-        with col2:
-            name_en = st.text_input("영어명", key=f"en_{category_type}_{level}")
-            name_vi = st.text_input("베트남어명", key=f"vi_{category_type}_{level}")
-        
+        new_code = st.text_input("컴포넌트 코드*", key=f"code_{category_type}_{level}")
+        name_en = st.text_input("영어명*", key=f"en_{category_type}_{level}")
+       
         # 상위 컴포넌트 선택 (level2 이상일 때)
         parent_component = ""
         if level != 'level1':
@@ -495,7 +488,7 @@ def show_level_components(category_type, level):
                 parent_component = ""
         
         if st.form_submit_button("➕ 추가", type="primary"):
-            if new_code and name_ko:
+            if new_code and name_en:
                 # 데이터베이스에 새 컴포넌트 추가
                 if add_new_component(category_type, level, new_code, name_ko, name_en, name_vi, parent_component):
                     st.success(f"✅ '{new_code}' 컴포넌트가 추가되었습니다!")
@@ -504,7 +497,7 @@ def show_level_components(category_type, level):
                 else:
                     st.error("❌ 컴포넌트 추가에 실패했습니다.")
             else:
-                st.error("❌ 컴포넌트 코드와 한국어명은 필수입니다.")
+                st.error("❌ 컴포넌트 코드와 영어명은 필수입니다.")
                 
 def get_parent_level(level):
     """상위 레벨 반환"""
