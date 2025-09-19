@@ -506,8 +506,9 @@ def get_parent_level(level):
     }
     return level_map.get(level)
 
-def add_new_component(category_type, level, component_code, name_en, parent_component):
-    """새 컴포넌트를 데이터베이스에 추가"""
+# 추가로 더 안전한 버전 (ON CONFLICT 사용)
+def add_new_component_safe(category_type, level, component_code, name_en, parent_component):
+    """새 컴포넌트를 데이터베이스에 추가 - ON CONFLICT 사용"""
     try:
         with get_safe_db_connection() as conn:
             if conn is None:
@@ -515,14 +516,31 @@ def add_new_component(category_type, level, component_code, name_en, parent_comp
                 
             cursor = conn.cursor()
             
+            # ON CONFLICT를 사용한 안전한 삽입
             cursor.execute("""
                 INSERT INTO multi_category_components 
                 (category_type, level, component_code, component_name_en, parent_component, is_active)
                 VALUES (%s, %s, %s, %s, %s, 1)
+                ON CONFLICT (category_type, level, component_code) 
+                DO UPDATE SET 
+                    component_name_en = EXCLUDED.component_name_en,
+                    parent_component = EXCLUDED.parent_component,
+                    updated_date = CURRENT_TIMESTAMP
+                RETURNING component_code, (xmax = 0) AS was_inserted
             """, (category_type, level, component_code, name_en, parent_component or None))
             
+            result = cursor.fetchone()
             conn.commit()
-            return True
+            
+            if result:
+                code, was_inserted = result
+                if was_inserted:
+                    st.success(f"새 컴포넌트가 추가되었습니다: {code}")
+                else:
+                    st.info(f"기존 컴포넌트가 업데이트되었습니다: {code}")
+                return True
+            else:
+                return False
             
     except Exception as e:
         st.error(f"데이터베이스 오류: {e}")
