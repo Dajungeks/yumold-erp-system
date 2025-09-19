@@ -460,7 +460,84 @@ def show_level_components(category_type, level):
     
     else:
         st.info(f"📝 {level.upper()}에 등록된 컴포넌트가 없습니다.")
+    
+    # 새 컴포넌트 추가 폼
+    st.markdown("---")
+    st.markdown("##### ➕ 새 컴포넌트 추가")
+    
+    with st.form(f"add_component_{category_type}_{level}"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            new_code = st.text_input("컴포넌트 코드*", key=f"code_{category_type}_{level}")
+            name_ko = st.text_input("한국어명*", key=f"ko_{category_type}_{level}")
+            
+        with col2:
+            name_en = st.text_input("영어명", key=f"en_{category_type}_{level}")
+            name_vi = st.text_input("베트남어명", key=f"vi_{category_type}_{level}")
+        
+        # 상위 컴포넌트 선택 (level2 이상일 때)
+        parent_component = ""
+        if level != 'level1':
+            parent_level = get_parent_level(level)
+            parent_components = get_components_cached(category_type, parent_level)
+            
+            if parent_components:
+                parent_options = [""] + [comp[0] for comp in parent_components]  # comp[0]은 code
+                parent_component = st.selectbox(
+                    "상위 컴포넌트 선택", 
+                    parent_options,
+                    key=f"parent_{category_type}_{level}"
+                )
+            else:
+                st.warning(f"먼저 {parent_level.upper()}에 컴포넌트를 등록하세요.")
+                parent_component = ""
+        
+        if st.form_submit_button("➕ 추가", type="primary"):
+            if new_code and name_ko:
+                # 데이터베이스에 새 컴포넌트 추가
+                if add_new_component(category_type, level, new_code, name_ko, name_en, name_vi, parent_component):
+                    st.success(f"✅ '{new_code}' 컴포넌트가 추가되었습니다!")
+                    clear_component_cache()
+                    st.rerun()
+                else:
+                    st.error("❌ 컴포넌트 추가에 실패했습니다.")
+            else:
+                st.error("❌ 컴포넌트 코드와 한국어명은 필수입니다.")
+                
+def get_parent_level(level):
+    """상위 레벨 반환"""
+    level_map = {
+        'level2': 'level1',
+        'level3': 'level2', 
+        'level4': 'level3',
+        'level5': 'level4',
+        'level6': 'level5'
+    }
+    return level_map.get(level)
 
+def add_new_component(category_type, level, component_code, name_ko, name_en, name_vi, parent_component):
+    """새 컴포넌트를 데이터베이스에 추가"""
+    try:
+        with get_safe_db_connection() as conn:
+            if conn is None:
+                return False
+                
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO multi_category_components 
+                (category_type, level, component_code, component_name_ko, component_name_en, component_name_vi, parent_component, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
+            """, (category_type, level, component_code, name_ko, name_en, name_vi, parent_component or None))
+            
+            conn.commit()
+            return True
+            
+    except Exception as e:
+        st.error(f"데이터베이스 오류: {e}")
+        return False
+    
 def show_category_management_tools():
     """카테고리 관리 도구"""
     
