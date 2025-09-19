@@ -51,24 +51,24 @@ def get_safe_db_connection():
 
 @st.cache_data(ttl=300)  # 5분 캐시
 def get_components_cached(category_type, level, parent_component=None):
-    """캐시된 컴포넌트 조회"""
+    """캐시된 컴포넌트 조회 - 캐시 제거"""
     try:
         with get_safe_db_connection() as conn:
             if conn is None:
                 return []
-            
+                
             cursor = conn.cursor()
             
             if parent_component:
                 cursor.execute("""
-                    SELECT component_code, component_name_ko, component_name_en, component_name_vi, is_active
+                    SELECT component_code, component_name_en, is_active
                     FROM multi_category_components 
                     WHERE category_type = %s AND level = %s AND parent_component = %s
                     ORDER BY component_code
                 """, (category_type, level, parent_component))
             else:
                 cursor.execute("""
-                    SELECT component_code, component_name_ko, component_name_en, component_name_vi, is_active
+                    SELECT component_code, component_name_en, is_active
                     FROM multi_category_components 
                     WHERE category_type = %s AND level = %s AND (parent_component IS NULL OR parent_component = '')
                     ORDER BY component_code
@@ -76,6 +76,11 @@ def get_components_cached(category_type, level, parent_component=None):
             
             results = cursor.fetchall()
             return [list(row) for row in results]
+            
+    except Exception as e:
+        st.error(f"컴포넌트 조회 오류: {e}")
+        return []
+    
             
     except Exception as e:
         st.error(f"컴포넌트 조회 오류: {e}")
