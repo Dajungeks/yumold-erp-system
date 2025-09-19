@@ -1162,6 +1162,33 @@ def show_category_management_tabs(config_manager, multi_manager):
 @performance_monitor
 def show_registered_codes(config_manager, multi_manager):
     """등록된 코드들을 표시하는 테이블 - 최적화"""
+    
+    # 긴급 활성화 버튼 추가 (이 부분을 추가하세요)
+    if st.button("🚨 모든 카테고리 즉시 활성화", type="primary"):
+        try:
+            conn = get_optimized_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE multi_category_components SET is_active = 1")
+            conn.commit()
+            conn.close()
+            st.success("모든 카테고리가 활성화되었습니다!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"오류: {e}")
+    """등록된 코드들을 표시하는 테이블 - 최적화"""
+    
+    # 긴급 활성화 버튼 추가 (이 부분을 추가하세요)
+    if st.button("🚨 모든 카테고리 즉시 활성화", type="primary"):
+        try:
+            conn = get_optimized_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE multi_category_components SET is_active = 1")
+            conn.commit()
+            conn.close()
+            st.success("모든 카테고리가 활성화되었습니다!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"오류: {e}")
     st.subheader("📝 등록된 코드 설명")
     
     postgres_manager = BasePostgreSQLManager()
