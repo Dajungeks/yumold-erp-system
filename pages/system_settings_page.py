@@ -493,9 +493,9 @@ def show_level_components(category_type, level):
                 parent_component = ""
         
         if st.form_submit_button("➕ 추가", type="primary"):
-            if new_code and name_en:
+            if new_code and name_en:# name_ko가 아닌 name_en
                 # 데이터베이스에 새 컴포넌트 추가
-                if add_new_component(category_type, level, new_code, name_ko, name_en, name_vi, parent_component):
+                if add_new_component(category_type, level, new_code, name_en, parent_component):
                     st.success(f"✅ '{new_code}' 컴포넌트가 추가되었습니다!")
                     clear_component_cache()
                     st.rerun()
