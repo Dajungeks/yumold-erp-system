@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import io
-from managers.purchase_manager import PurchaseManager
+from managers.legacy.purchase_order_manager import PurchaseOrderManager as PurchaseManager
 
 def show_purchase_page(get_text):
     """구매품 관리 페이지를 표시"""
