@@ -510,7 +510,7 @@ def get_parent_level(level):
     }
     return level_map.get(level)
 
-def add_new_component(category_type, level, component_code, name_ko, name_en, name_vi, parent_component):
+def add_new_component(category_type, level, new_code, name_en, parent_component):
     """새 컴포넌트를 데이터베이스에 추가"""
     try:
         with get_safe_db_connection() as conn:
