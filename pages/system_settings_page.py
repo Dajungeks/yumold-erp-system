@@ -464,6 +464,7 @@ def show_level_components(category_type, level):
     # 새 컴포넌트 추가 폼
     st.markdown("---")
     st.markdown("##### ➕ 새 컴포넌트 추가")
+    st.write("🔥 테스트: 이 메시지가 보이면 코드가 실행되고 있습니다!")  # 👈 이 줄 추가
     
     with st.form(f"add_component_{category_type}_{level}"):
         col1, col2 = st.columns(2)
