@@ -1,5 +1,5 @@
 """
-시스템 설정 페이지 - 제품 분류 관리 중심 (속도 최적화 버전 v19)
+시스템 설정 페이지 - 제품 분류 관리 중심 (카테고리 활성화 문제 해결 v20)
 """
 
 import streamlit as st
@@ -115,6 +115,140 @@ def performance_monitor(func):
         return result
     return wrapper
 
+# ============== 카테고리 활성화 상태 관리 ==============
+
+def initialize_category_configs():
+    """모든 카테고리를 기본적으로 활성화 상태로 초기화"""
+    try:
+        conn = get_optimized_db_connection()
+        cursor = conn.cursor()
+        
+        # category_configs 테이블이 있는지 확인
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'category_configs'
+            )
+        """)
+        table_exists = cursor.fetchone()[0]
+        
+        if not table_exists:
+            # 테이블이 없으면 생성
+            cursor.execute("""
+                CREATE TABLE category_configs (
+                    category_type VARCHAR(10) PRIMARY KEY,
+                    is_enabled BOOLEAN DEFAULT TRUE,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            st.info("카테고리 설정 테이블을 생성했습니다.")
+        
+        # A~I 카테고리 기본 활성화 설정
+        categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+        
+        for category in categories:
+            cursor.execute("""
+                INSERT INTO category_configs (category_type, is_enabled)
+                VALUES (%s, TRUE)
+                ON CONFLICT (category_type) 
+                DO UPDATE SET is_enabled = TRUE
+            """, (category,))
+        
+        conn.commit()
+        conn.close()
+        
+        st.success("모든 카테고리가 활성화되었습니다!")
+        return True
+        
+    except Exception as e:
+        st.error(f"카테고리 초기화 오류: {e}")
+        return False
+
+def check_category_enabled(category_type):
+    """카테고리 활성화 상태 확인 - 개선된 버전"""
+    try:
+        conn = get_optimized_db_connection()
+        cursor = conn.cursor()
+        
+        # 카테고리 설정 확인
+        cursor.execute("""
+            SELECT is_enabled FROM category_configs 
+            WHERE category_type = %s
+        """, (category_type,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result is None:
+            # 설정이 없으면 기본적으로 활성화로 처리하고 DB에 추가
+            create_default_category_config(category_type)
+            return True
+        
+        return result[0] if result[0] is not None else True
+        
+    except Exception as e:
+        # 에러 발생 시 기본적으로 활성화로 처리
+        st.warning(f"카테고리 상태 확인 오류 (기본 활성화 처리): {e}")
+        return True
+
+def create_default_category_config(category_type):
+    """기본 카테고리 설정 생성"""
+    try:
+        conn = get_optimized_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO category_configs (category_type, is_enabled)
+            VALUES (%s, TRUE)
+            ON CONFLICT (category_type) DO NOTHING
+        """, (category_type,))
+        
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        st.warning(f"기본 카테고리 설정 생성 실패: {e}")
+
+def toggle_category_status(category_type):
+    """카테고리 활성화/비활성화 토글"""
+    try:
+        conn = get_optimized_db_connection()
+        cursor = conn.cursor()
+        
+        # 현재 상태 확인
+        cursor.execute("""
+            SELECT is_enabled FROM category_configs 
+            WHERE category_type = %s
+        """, (category_type,))
+        
+        result = cursor.fetchone()
+        current_status = result[0] if result else True
+        new_status = not current_status
+        
+        # 상태 업데이트
+        cursor.execute("""
+            INSERT INTO category_configs (category_type, is_enabled, updated_date)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (category_type) 
+            DO UPDATE SET 
+                is_enabled = EXCLUDED.is_enabled,
+                updated_date = EXCLUDED.updated_date
+        """, (category_type, new_status))
+        
+        conn.commit()
+        conn.close()
+        
+        status_text = "활성화" if new_status else "비활성화"
+        st.success(f"Category {category_type}가 {status_text}되었습니다!")
+        
+        return new_status
+        
+    except Exception as e:
+        st.error(f"카테고리 상태 변경 오류: {e}")
+        return None
+
 # ============== 기존 함수들 ==============
 
 def get_db_connection():
@@ -175,6 +309,18 @@ def show_system_settings_page(config_manager, get_text_func, hide_header=False, 
         st.header("⚙️ 시스템 설정")
         st.caption("제품 분류, 회사 정보, 시스템 옵션을 관리합니다")
     
+    # 카테고리 초기화 버튼 추가
+    col_init, col_status = st.columns([1, 3])
+    with col_init:
+        if st.button("🔄 카테고리 초기화", help="모든 카테고리를 활성화 상태로 초기화합니다"):
+            if initialize_category_configs():
+                clear_component_cache()
+                st.rerun()
+    
+    with col_status:
+        # 카테고리 활성화 상태 표시
+        show_category_status_overview()
+    
     # 메인 시스템 설정 탭 구성
     main_tabs = st.tabs(["🏗️ 제품 카테고리 관리", "🏢 회사 기본 정보", "🏭 공급업체 관리"])
     
@@ -207,6 +353,34 @@ def show_system_settings_page(config_manager, get_text_func, hide_header=False, 
             show_supplier_management(managers['supplier_manager'])
         else:
             st.error("공급업체 관리자가 로드되지 않았습니다.")
+
+def show_category_status_overview():
+    """카테고리 활성화 상태 개요"""
+    categories = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    
+    # 각 카테고리의 활성화 상태와 데이터 개수 확인
+    status_data = []
+    
+    for category in categories:
+        is_enabled = check_category_enabled(category)
+        
+        # 해당 카테고리의 데이터 개수 확인
+        try:
+            conn = get_optimized_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM multi_category_components 
+                WHERE category_type = %s AND is_active = 1
+            """, (category,))
+            data_count = cursor.fetchone()[0]
+            conn.close()
+        except:
+            data_count = 0
+        
+        status_emoji = "✅" if is_enabled else "❌"
+        status_data.append(f"{status_emoji} {category}({data_count})")
+    
+    st.info(f"카테고리 상태: {' | '.join(status_data)}")
 
 def show_supplier_management(supplier_manager):
     """공급업체 관리 섹션"""
@@ -787,7 +961,7 @@ def upload_category_csv(df, category):
 
 @performance_monitor            
 def show_category_table_query_section(config_manager, multi_manager):
-    """카테고리별 테이블 조회 섹션 - 최적화"""
+    """카테고리별 테이블 조회 섹션 - 활성화 상태 확인 개선"""
     
     # Category 선택 필터
     col1, col2 = st.columns([1, 3])
@@ -797,7 +971,28 @@ def show_category_table_query_section(config_manager, multi_manager):
         selected_category = st.selectbox("📋 카테고리 선택", categories)
     
     with col2:
-        st.info(f"선택된 카테고리: **{selected_category}**")
+        category_letter = selected_category.split()[-1]  # "Category A" -> "A"
+        
+        # 카테고리 활성화 상태 및 토글 버튼
+        is_enabled = check_category_enabled(category_letter)
+        status_text = "활성화" if is_enabled else "비활성화"
+        status_emoji = "✅" if is_enabled else "❌"
+        
+        col_status, col_toggle = st.columns([2, 1])
+        with col_status:
+            st.info(f"선택된 카테고리: **{selected_category}** {status_emoji} {status_text}")
+        with col_toggle:
+            if st.button(f"🔄 {'비활성화' if is_enabled else '활성화'}", key=f"toggle_{category_letter}"):
+                new_status = toggle_category_status(category_letter)
+                if new_status is not None:
+                    clear_component_cache()
+                    st.rerun()
+    
+    # 비활성화된 카테고리인 경우 경고 표시하고 활성화 안내
+    if not check_category_enabled(category_letter):
+        st.warning(f"⚠️ {selected_category}는 현재 비활성화 상태입니다. 위의 '활성화' 버튼을 클릭하여 활성화한 후 사용해주세요.")
+        st.info("💡 카테고리를 활성화하면 해당 카테고리의 모든 기능을 사용할 수 있습니다.")
+        return
     
     postgres_manager = BasePostgreSQLManager()
     conn = None
@@ -805,9 +1000,6 @@ def show_category_table_query_section(config_manager, multi_manager):
         import pandas as pd
         
         conn = postgres_manager.get_connection()
-        
-        # 선택된 카테고리에 따른 테이블 및 쿼리 설정
-        category_letter = selected_category.split()[-1]  # "Category A" -> "A"
         
         # 최적화된 쿼리 - 인덱스 활용
         query = f'''
@@ -876,12 +1068,36 @@ def show_category_table_query_section(config_manager, multi_manager):
                 mime="text/csv"
             )
         else:
-            # Category의 활성화 상태 확인" 
-            config = multi_manager.get_category_config(category_letter)
-            if not config or not config['is_enabled']:
-                st.warning(f"{selected_category}는 비활성화 상태입니다. Category 관리에서 활성화해주세요.")
-            else:
-                st.info("완성된 코드가 없습니다. 6단계 구성 요소가 모두 등록되어야 완성된 코드가 생성됩니다.")
+            # 완성된 코드가 없는 경우 - 6단계 구성이 모두 필요함을 안내
+            st.info("💡 완성된 코드가 없습니다.")
+            st.markdown("""
+            **완성된 코드 생성 조건:**
+            - 6단계 구성 요소가 모두 등록되어야 합니다
+            - Level 1 → Level 2 → Level 3 → Level 4 → Level 5 → Level 6
+            - 각 단계의 구성 요소가 활성화 상태여야 합니다
+            """)
+            
+            # 각 레벨별 등록 상태 확인
+            level_status = []
+            for i in range(1, 7):
+                level_name = f"level{i}"
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM multi_category_components 
+                        WHERE category_type = %s AND component_level = %s AND is_active = 1
+                    """, (category_letter, level_name))
+                    count = cursor.fetchone()[0]
+                    status_emoji = "✅" if count > 0 else "❌"
+                    level_status.append(f"{status_emoji} Level {i}: {count}개")
+                except:
+                    level_status.append(f"❌ Level {i}: 조회 실패")
+            
+            st.markdown("**현재 등록 상태:**")
+            for status in level_status:
+                st.write(f"- {status}")
+            
+            st.info("Category 관리 탭에서 각 레벨의 구성 요소를 등록해주세요.")
             
     except Exception as e:
         st.error(f"테이블 조회 중 오류가 발생했습니다: {e}")
@@ -952,6 +1168,14 @@ def show_registered_codes(config_manager, multi_manager):
             for main_cat in main_categories:
                 row_data = [f"Category {main_cat}"]
                 
+                # 카테고리 활성화 상태 확인
+                is_enabled = check_category_enabled(main_cat)
+                if not is_enabled:
+                    # 비활성화된 카테고리는 "비활성화"로 표시
+                    row_data.extend(["비활성화"] * 7)
+                    data_rows.append(row_data)
+                    continue
+                
                 # 모든 카테고리가 multi_category_components 테이블 사용 (통일됨)
                 level_names = ["level1", "level2", "level3", "level4", "level5", "level6"]
                 
@@ -1000,7 +1224,7 @@ def show_registered_codes(config_manager, multi_manager):
         
         st.dataframe(df, use_container_width=True)
         
-        # 총 등록 코드 수 (모든 카테고리)
+        # 총 등록 코드 수 (활성화된 카테고리만)
         if data_rows:
             total_codes = 0
             category_totals = {}
@@ -1011,7 +1235,7 @@ def show_registered_codes(config_manager, multi_manager):
                 category_total = 0
                 
                 for codes_str in category_codes:
-                    if codes_str not in ["미등록", "미구현", "오류"]:
+                    if codes_str not in ["미등록", "미구현", "오류", "비활성화"]:
                         if isinstance(codes_str, str) and codes_str:
                             category_total += len(codes_str.split(", "))
                 
@@ -1023,7 +1247,7 @@ def show_registered_codes(config_manager, multi_manager):
             if category_totals:
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.info(f"📊 **전체 {total_codes}개**의 코드가 등록되어 있습니다.")
+                    st.info(f"전체 {total_codes}개의 코드가 등록되어 있습니다.")
                 with col2:
                     summary_text = " | ".join([f"{cat}: {count}개" for cat, count in category_totals.items()])
                     st.caption(f"카테고리별: {summary_text}")
@@ -1038,7 +1262,28 @@ def show_registered_codes(config_manager, multi_manager):
 
 def manage_general_category(multi_manager, category_type):
     """Category A~I 구성 요소 관리 (모든 카테고리 동일한 구조)"""
-    st.subheader(f"🏗️ Category {category_type}")
+    st.subheader(f"Category {category_type}")
+    
+    # 카테고리 활성화 상태 확인 및 토글
+    col_status, col_toggle = st.columns([3, 1])
+    
+    with col_status:
+        is_enabled = check_category_enabled(category_type)
+        status_text = "활성화" if is_enabled else "비활성화"
+        status_emoji = "✅" if is_enabled else "❌"
+        st.info(f"카테고리 상태: {status_emoji} {status_text}")
+    
+    with col_toggle:
+        if st.button(f"{'비활성화' if is_enabled else '활성화'}", key=f"toggle_cat_{category_type}"):
+            new_status = toggle_category_status(category_type)
+            if new_status is not None:
+                clear_component_cache()
+                st.rerun()
+    
+    # 비활성화된 카테고리인 경우 안내 메시지
+    if not is_enabled:
+        st.warning(f"Category {category_type}가 비활성화되어 있습니다. 위의 '활성화' 버튼을 클릭하여 활성화한 후 사용해주세요.")
+        return
     
     # 세션 상태 초기화
     if f'{category_type.lower()}_component_tab' in st.session_state:
@@ -1048,12 +1293,12 @@ def manage_general_category(multi_manager, category_type):
     
     # Category 구성 요소 관리 탭 (모든 카테고리 동일한 6단계)
     hr_tabs = st.tabs([
-        f"🔧 Category {category_type}-1 (Product)", 
-        f"📋 Category {category_type}-2 (Code)", 
-        f"🚪 Category {category_type}-3 (Code)", 
-        f"📏 Category {category_type}-4 (Code)",
-        f"🔩 Category {category_type}-5 (Code)",
-        f"⚙️ Category {category_type}-6 (Code)"
+        f"Category {category_type}-1 (Product)", 
+        f"Category {category_type}-2 (Code)", 
+        f"Category {category_type}-3 (Code)", 
+        f"Category {category_type}-4 (Code)",
+        f"Category {category_type}-5 (Code)",
+        f"Category {category_type}-6 (Code)"
     ])
     
     with hr_tabs[0]:
@@ -1144,7 +1389,7 @@ def manage_level_components_optimized(multi_manager, category_type, level, paren
     """최적화된 레벨 구성 요소 관리"""
     
     # 지연 로딩 체크박스
-    show_components = st.checkbox(f"🔍 {title} 목록 보기", key=f"show_{category_type}_{level}_{parent_component or 'root'}")
+    show_components = st.checkbox(f"목록 보기", key=f"show_{category_type}_{level}_{parent_component or 'root'}")
     
     if show_components:
         with st.spinner(f"{title} 로딩 중..."):
@@ -1271,15 +1516,19 @@ def create_performance_indexes():
     CREATE INDEX IF NOT EXISTS idx_multi_category_active ON multi_category_components(is_active);
     CREATE INDEX IF NOT EXISTS idx_multi_category_composite ON multi_category_components(category_type, component_level, parent_component, is_active);
     CREATE INDEX IF NOT EXISTS idx_multi_category_created ON multi_category_components(created_date);
+    
+    -- 카테고리 설정 테이블 인덱스
+    CREATE INDEX IF NOT EXISTS idx_category_configs_type ON category_configs(category_type);
+    CREATE INDEX IF NOT EXISTS idx_category_configs_enabled ON category_configs(is_enabled);
     """
     
     st.code(sql_commands, language="sql")
     st.info("위 SQL을 Supabase SQL Editor에서 실행하면 성능이 크게 향상됩니다.")
 
-# 성능 최적화 도구 섹션 (페이지 맨 아래에 추가)
+# 성능 최적화 도구 섹션
 def show_performance_tools():
     """성능 최적화 도구"""
-    with st.expander("🚀 성능 최적화 도구"):
+    with st.expander("성능 최적화 도구"):
         st.markdown("### 데이터베이스 인덱스 생성")
         st.caption("카탈로그 등록 속도를 80% 향상시키는 인덱스를 생성합니다.")
         
@@ -1289,178 +1538,45 @@ def show_performance_tools():
         st.markdown("### 캐시 관리")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 캐시 초기화"):
+            if st.button("캐시 초기화"):
                 clear_component_cache()
                 st.success("캐시가 초기화되었습니다!")
         
         with col2:
             st.info("캐시 TTL: 5분")
         
-        st.markdown("### 성능 통계")
-        col_stat1, col_stat2, col_stat3 = st.columns(3)
-        with col_stat1:
-            st.metric("캐시 상태", "활성")
-        with col_stat2:
-            st.metric("연결 풀", "최적화됨")
-        with col_stat3:
-            st.metric("페이지네이션", "20개/페이지")
+        st.markdown("### 카테고리 관리")
+        col_init, col_status = st.columns(2)
+        with col_init:
+            if st.button("전체 카테고리 활성화"):
+                if initialize_category_configs():
+                    clear_component_cache()
+                    st.rerun()
+        
+        with col_status:
+            st.info("A-I 카테고리 일괄 활성화")
 
 def show_system_status():
     """시스템 상태 표시"""
     st.markdown("---")
-    st.caption("💡 시스템 상태: 카탈로그 코드 등록 속도 최적화 적용됨 (v19)")
+    st.caption("💡 시스템 상태: 카테고리 활성화 문제 해결 완료 (v20)")
 
-# 메인 실행 부 - system_settings_page.py가 직접 실행될 때만 작동
+# 메인 실행 부
 if __name__ == "__main__":
     # 테스트용 메인 함수
     st.set_page_config(
-        page_title="YMV ERP - 시스템 설정 (최적화 버전)",
+        page_title="YMV ERP - 시스템 설정 (카테고리 활성화 문제 해결)",
         page_icon="⚙️",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
-    # 시스템 설정 페이지 실행
     try:
-        show_system_settings_page()
-        
-        # 성능 도구 표시
+        show_system_settings_page(None, lambda x: x)
         show_performance_tools()
-        
-        # 시스템 상태 표시
         show_system_status()
         
     except Exception as e:
         st.error(f"시스템 설정 페이지 로드 오류: {e}")
         import traceback
         st.code(traceback.format_exc())
-
-# 추가 유틸리티 함수들
-def get_system_info():
-    """시스템 정보 반환"""
-    return {
-        "version": "v19",
-        "optimization": "카탈로그 속도 최적화",
-        "cache_enabled": True,
-        "pagination_enabled": True,
-        "lazy_loading": True,
-        "performance_monitoring": True
-    }
-
-def validate_system_requirements():
-    """시스템 요구사항 검증"""
-    requirements = {
-        "streamlit": True,
-        "pandas": True,
-        "postgresql": True,
-        "multi_category_manager": True
-    }
-    
-    try:
-        import streamlit as st
-        import pandas as pd
-        from managers.legacy.multi_category_manager import MultiCategoryManager
-        from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
-        return requirements
-    except ImportError as e:
-        st.error(f"필수 모듈 누락: {e}")
-        return False
-
-# 데이터베이스 헬스체크 함수
-def database_health_check():
-    """데이터베이스 연결 상태 확인"""
-    try:
-        conn = get_optimized_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        result = cursor.fetchone()
-        conn.close()
-        return True if result else False
-    except Exception as e:
-        st.error(f"데이터베이스 연결 오류: {e}")
-        return False
-
-# 성능 측정 함수
-@performance_monitor
-def measure_query_performance(category_type, level):
-    """쿼리 성능 측정"""
-    start_time = time.time()
-    components = get_components_fast(category_type, level)
-    end_time = time.time()
-    
-    return {
-        "execution_time": end_time - start_time,
-        "component_count": len(components),
-        "performance_rating": "Good" if (end_time - start_time) < 1.0 else "Needs Optimization"
-    }
-
-# 캐시 통계 함수
-def get_cache_stats():
-    """캐시 통계 정보"""
-    try:
-        cache_info = get_components_cached.cache_info() if hasattr(get_components_cached, 'cache_info') else None
-        return {
-            "cache_hits": cache_info.hits if cache_info else "N/A",
-            "cache_misses": cache_info.misses if cache_info else "N/A",
-            "cache_size": cache_info.currsize if cache_info else "N/A",
-            "max_size": cache_info.maxsize if cache_info else "N/A"
-        }
-    except:
-        return {"status": "Cache stats unavailable"}
-
-# 에러 핸들링 개선
-def safe_execute(func, *args, **kwargs):
-    """안전한 함수 실행 래퍼"""
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        st.error(f"실행 오류: {func.__name__} - {str(e)}")
-        return None
-
-# 로깅 함수
-def log_performance_event(event_type, execution_time, details=None):
-    """성능 이벤트 로깅"""
-    import datetime
-    log_entry = {
-        "timestamp": datetime.datetime.now(),
-        "event_type": event_type,
-        "execution_time": execution_time,
-        "details": details or {}
-    }
-    
-    # 세션 상태에 로그 저장 (프로덕션에서는 실제 로깅 시스템 사용)
-    if "performance_logs" not in st.session_state:
-        st.session_state.performance_logs = []
-    
-    st.session_state.performance_logs.append(log_entry)
-    
-    # 최대 100개 로그만 유지
-    if len(st.session_state.performance_logs) > 100:
-        st.session_state.performance_logs = st.session_state.performance_logs[-100:]
-
-# 메모리 사용량 최적화
-def optimize_memory_usage():
-    """메모리 사용량 최적화"""
-    import gc
-    
-    # 가비지 컬렉션 실행
-    gc.collect()
-    
-    # 불필요한 세션 상태 정리
-    keys_to_remove = []
-    for key in st.session_state.keys():
-        if key.startswith("temp_") or key.startswith("old_"):
-            keys_to_remove.append(key)
-    
-    for key in keys_to_remove:
-        del st.session_state[key]
-
-# 전역 설정
-SYSTEM_CONFIG = {
-    "VERSION": "v19",
-    "CACHE_TTL": 300,  # 5분
-    "PAGE_SIZE": 20,
-    "MAX_QUERY_LIMIT": 1000,
-    "PERFORMANCE_THRESHOLD": 2.0,  # 2초
-    "AUTO_OPTIMIZE": True
-}
