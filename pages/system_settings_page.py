@@ -31,7 +31,7 @@ def get_safe_db_connection():
         conn = psycopg2.connect(
             host=st.secrets["postgres"]["host"],
             port=st.secrets["postgres"]["port"], 
-            database=st.secrets["postgres"]["dbname"],
+            database=st.secrets["postgres"]["database"],
             user=st.secrets["postgres"]["user"],
             password=st.secrets["postgres"]["password"],
             connect_timeout=10,  # 연결 타임아웃 10초
