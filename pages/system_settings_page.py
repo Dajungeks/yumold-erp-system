@@ -965,6 +965,21 @@ def show_category_table_query_section(config_manager, multi_manager):
     
     # Category 선택 필터
     col1, col2 = st.columns([1, 3])
+    # 긴급 활성화 버튼 추가
+    if st.button("⚡ 긴급: 모든 카테고리 활성화", type="primary"):
+        try:
+            conn = get_optimized_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE multi_category_components SET is_active = 1")
+            conn.commit()
+            conn.close()
+            clear_component_cache()
+            st.success("모든 카테고리가 활성화되었습니다!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"오류: {e}")
+    
+    st.markdown("---")  # 구분선 추가
     
     with col1:
         categories = ["Category A", "Category B", "Category C", "Category D", "Category E", "Category F", "Category G", "Category H", "Category I"]
