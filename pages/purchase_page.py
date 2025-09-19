@@ -5,7 +5,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
-from managers.legacy.purchase_order_manager import OfficePurchaseManager
+from managers.legacy.office_purchase_manager import OfficePurchaseManager
 
 def show_purchase_page(get_text):
     """사무용품 구매 기록 페이지를 표시"""
