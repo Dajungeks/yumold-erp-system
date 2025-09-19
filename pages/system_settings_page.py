@@ -49,9 +49,10 @@ def get_safe_db_connection():
             except:
                 pass
 
-@st.cache_data(ttl=300)  # 5분 캐시
+# 추가로 get_components_cached 함수에서 중복된 except 블록 제거
+@st.cache_data(ttl=300)
 def get_components_cached(category_type, level, parent_component=None):
-    """캐시된 컴포넌트 조회 - 캐시 제거"""
+    """캐시된 컴포넌트 조회"""
     try:
         with get_safe_db_connection() as conn:
             if conn is None:
@@ -76,11 +77,6 @@ def get_components_cached(category_type, level, parent_component=None):
             
             results = cursor.fetchall()
             return [list(row) for row in results]
-            
-    except Exception as e:
-        st.error(f"컴포넌트 조회 오류: {e}")
-        return []
-    
             
     except Exception as e:
         st.error(f"컴포넌트 조회 오류: {e}")
@@ -385,7 +381,7 @@ def show_category_detail(category_type, config_manager):
             show_level_components(category_type, level)
 
 def show_level_components(category_type, level):
-    """레벨별 컴포넌트 표시 및 관리"""
+    """레벨별 컴포넌트 표시 및 관리 - 완전 수정 버전"""
     
     st.markdown(f"##### {level.upper()} 컴포넌트")
     
@@ -393,13 +389,15 @@ def show_level_components(category_type, level):
     components = get_components_cached(category_type, level)
     
     if components:
-        # 데이터프레임으로 표시
-        df = pd.DataFrame(components, columns=[
-            '코드', '영어명', '활성상태'  # 수정: 컬럼명을 실제 데이터에 맞게 조정
-        ])
+        # 데이터 구조 확인 후 DataFrame 생성
+        if len(components) > 0 and len(components[0]) >= 3:
+            df = pd.DataFrame(components, columns=['코드', '영어명', '활성상태'])
+        else:
+            st.warning("데이터 구조가 올바르지 않습니다.")
+            return
         
         # 활성상태를 읽기 쉽게 변환
-        df['활성상태'] = df['활성상태'].apply(lambda x: '✅ 활성' if x == 1 else '❌ 비활성')
+        df['활성상태'] = df['활성상태'].apply(lambda x: '활성' if x == 1 else '비활성')
         
         # 필터링 옵션
         col_filter1, col_filter2 = st.columns(2)
@@ -421,9 +419,9 @@ def show_level_components(category_type, level):
         filtered_df = df.copy()
         
         if status_filter == "활성만":
-            filtered_df = filtered_df[filtered_df['활성상태'] == '✅ 활성']
+            filtered_df = filtered_df[filtered_df['활성상태'] == '활성']
         elif status_filter == "비활성만":
-            filtered_df = filtered_df[filtered_df['활성상태'] == '❌ 비활성']
+            filtered_df = filtered_df[filtered_df['활성상태'] == '비활성']
         
         if search_term:
             mask = (
@@ -432,16 +430,12 @@ def show_level_components(category_type, level):
             )
             filtered_df = filtered_df[mask]
         
-        # 결과 표시 - width=None 제거
-        st.dataframe(
-            filtered_df,
-            use_container_width=True,  # width 대신 use_container_width 사용
-            hide_index=True
-        )
+        # 결과 표시 - width 매개변수를 완전히 제거
+        st.dataframe(filtered_df, hide_index=True)
         
         # 개별 상태 변경 기능
         if len(filtered_df) > 0:
-            st.markdown("##### 🔧 상태 변경")
+            st.markdown("##### 상태 변경")
             selected_code = st.selectbox(
                 "변경할 컴포넌트 선택",
                 filtered_df['코드'].tolist(),
@@ -450,23 +444,22 @@ def show_level_components(category_type, level):
             
             if selected_code:
                 current_status_text = filtered_df[filtered_df['코드'] == selected_code]['활성상태'].iloc[0]
-                current_status = 1 if current_status_text == '✅ 활성' else 0
-                new_status_text = '❌ 비활성' if current_status == 1 else '✅ 활성'
+                current_status = 1 if current_status_text == '활성' else 0
+                new_status_text = '비활성' if current_status == 1 else '활성'
                 
-                if st.button(f"'{selected_code}' → {new_status_text}", key=f"btn_{category_type}_{level}_{selected_code}"):
+                if st.button(f"'{selected_code}' -> {new_status_text}", key=f"btn_{category_type}_{level}_{selected_code}"):
                     result = toggle_category_active_status(category_type, selected_code, current_status)
                     if result is not None:
-                        st.success(f"✅ '{selected_code}' 상태가 변경되었습니다!")
+                        st.success(f"'{selected_code}' 상태가 변경되었습니다!")
                         st.rerun()
                     else:
-                        st.error("❌ 상태 변경에 실패했습니다.")
-    
+                        st.error("상태 변경에 실패했습니다.")
     else:
-        st.info(f"📝 {level.upper()}에 등록된 컴포넌트가 없습니다.")
+        st.info(f"{level.upper()}에 등록된 컴포넌트가 없습니다.")
     
     # 새 컴포넌트 추가 폼
     st.markdown("---")
-    st.markdown("##### ➕ 새 컴포넌트 추가")
+    st.markdown("##### 새 컴포넌트 추가")
     
     with st.form(f"add_component_{category_type}_{level}"):
         new_code = st.text_input("컴포넌트 코드*", key=f"code_{category_type}_{level}")
@@ -476,32 +469,32 @@ def show_level_components(category_type, level):
         parent_component = ""
         if level != 'level1':
             parent_level = get_parent_level(level)
-            parent_components = get_components_cached(category_type, parent_level)
-            
-            if parent_components:
-                parent_options = [""] + [comp[0] for comp in parent_components]  # comp[0]은 code
-                parent_component = st.selectbox(
-                    "상위 컴포넌트 선택", 
-                    parent_options,
-                    key=f"parent_{category_type}_{level}"
-                )
-            else:
-                st.warning(f"먼저 {parent_level.upper()}에 컴포넌트를 등록하세요.")
-                parent_component = ""
+            if parent_level:
+                parent_components = get_components_cached(category_type, parent_level)
+                
+                if parent_components:
+                    parent_options = [""] + [comp[0] for comp in parent_components]
+                    parent_component = st.selectbox(
+                        "상위 컴포넌트 선택", 
+                        parent_options,
+                        key=f"parent_{category_type}_{level}"
+                    )
+                else:
+                    st.warning(f"먼저 {parent_level.upper()}에 컴포넌트를 등록하세요.")
         
-        if st.form_submit_button("➕ 추가", type="primary"):
+        if st.form_submit_button("추가", type="primary"):
             if new_code and name_en:
-                # 데이터베이스에 새 컴포넌트 추가
                 if add_new_component(category_type, level, new_code, name_en, parent_component):
-                    st.success(f"✅ '{new_code}' 컴포넌트가 추가되었습니다!")
+                    st.success(f"'{new_code}' 컴포넌트가 추가되었습니다!")
                     clear_component_cache()
                     st.rerun()
                 else:
-                    st.error("❌ 컴포넌트 추가에 실패했습니다.")
+                    st.error("컴포넌트 추가에 실패했습니다.")
             else:
-                st.error("❌ 컴포넌트 코드와 영어명은 필수입니다.")
+                st.error("컴포넌트 코드와 영어명은 필수입니다.")
 
-                
+
+
 def get_parent_level(level):
     """상위 레벨 반환"""
     level_map = {
@@ -514,7 +507,7 @@ def get_parent_level(level):
     return level_map.get(level)
 
 def add_new_component(category_type, level, component_code, name_en, parent_component):
-    """새 컴포넌트를 데이터베이스에 추가 - 수정된 버전"""
+    """새 컴포넌트를 데이터베이스에 추가"""
     try:
         with get_safe_db_connection() as conn:
             if conn is None:
