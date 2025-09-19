@@ -49,9 +49,8 @@ def get_safe_db_connection():
             except:
                 pass
 
-@st.cache_data(ttl=300)  # 5분 캐시
 def get_components_cached(category_type, level, parent_component=None):
-    """캐시된 컴포넌트 조회 - 캐시 제거"""
+    """컴포넌트 조회 - 캐시 제거하여 안정성 확보"""
     try:
         with get_safe_db_connection() as conn:
             if conn is None:
@@ -80,15 +79,10 @@ def get_components_cached(category_type, level, parent_component=None):
     except Exception as e:
         st.error(f"컴포넌트 조회 오류: {e}")
         return []
-    
-            
-    except Exception as e:
-        st.error(f"컴포넌트 조회 오류: {e}")
-        return []
 
 def clear_component_cache():
-    """컴포넌트 캐시 클리어"""
-    get_components_cached.clear()
+    """컴포넌트 캐시 클리어 - 더미 함수"""
+    pass
 
 @st.cache_data(ttl=600)  # 10분 캐시
 def get_category_stats():
@@ -213,6 +207,39 @@ def toggle_category_active_status(category_type, component_code, current_status)
     except Exception as e:
         st.error(f"상태 변경 오류: {e}")
         return None
+
+def get_parent_level(level):
+    """상위 레벨 반환"""
+    level_map = {
+        'level2': 'level1',
+        'level3': 'level2', 
+        'level4': 'level3',
+        'level5': 'level4',
+        'level6': 'level5'
+    }
+    return level_map.get(level)
+
+def add_new_component(category_type, level, component_code, name_en, parent_component):
+    """새 컴포넌트를 데이터베이스에 추가"""
+    try:
+        with get_safe_db_connection() as conn:
+            if conn is None:
+                return False
+                
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO multi_category_components 
+                (category_type, level, component_code, component_name_en, parent_component, is_active)
+                VALUES (%s, %s, %s, %s, %s, 1)
+            """, (category_type, level, component_code, name_en, parent_component or None))
+            
+            conn.commit()
+            return True
+            
+    except Exception as e:
+        st.error(f"데이터베이스 오류: {e}")
+        return False
 
 # ================================================================================
 # 메인 시스템 설정 페이지
@@ -393,9 +420,9 @@ def show_level_components(category_type, level):
     components = get_components_cached(category_type, level)
     
     if components:
-        # 데이터프레임으로 표시
+        # 데이터프레임으로 표시 - 수정된 컬럼 구조
         df = pd.DataFrame(components, columns=[
-            '코드', '한국어명', '영어명', '베트남어명', '활성상태'
+            '코드', '영어명', '활성상태'
         ])
         
         # 활성상태를 읽기 쉽게 변환
@@ -428,16 +455,14 @@ def show_level_components(category_type, level):
         if search_term:
             mask = (
                 filtered_df['코드'].str.contains(search_term, case=False, na=False) |
-                filtered_df['한국어명'].str.contains(search_term, case=False, na=False) |
-                filtered_df['영어명'].str.contains(search_term, case=False, na=False) |
-                filtered_df['베트남어명'].str.contains(search_term, case=False, na=False)
+                filtered_df['영어명'].str.contains(search_term, case=False, na=False)
             )
             filtered_df = filtered_df[mask]
         
         # 결과 표시
         st.dataframe(
             filtered_df,
-            use_container_width=True,
+            width=None,
             hide_index=True
         )
         
@@ -469,7 +494,6 @@ def show_level_components(category_type, level):
     # 새 컴포넌트 추가 폼
     st.markdown("---")
     st.markdown("##### ➕ 새 컴포넌트 추가")
-    st.write("🔥 테스트: 이 메시지가 보이면 코드가 실행되고 있습니다!")  # 👈 이 줄 추가
     
     with st.form(f"add_component_{category_type}_{level}"):
         new_code = st.text_input("컴포넌트 코드*", key=f"code_{category_type}_{level}")
@@ -493,7 +517,7 @@ def show_level_components(category_type, level):
                 parent_component = ""
         
         if st.form_submit_button("➕ 추가", type="primary"):
-            if new_code and name_en:# name_ko가 아닌 name_en
+            if new_code and name_en:
                 # 데이터베이스에 새 컴포넌트 추가
                 if add_new_component(category_type, level, new_code, name_en, parent_component):
                     st.success(f"✅ '{new_code}' 컴포넌트가 추가되었습니다!")
@@ -503,40 +527,7 @@ def show_level_components(category_type, level):
                     st.error("❌ 컴포넌트 추가에 실패했습니다.")
             else:
                 st.error("❌ 컴포넌트 코드와 영어명은 필수입니다.")
-                
-def get_parent_level(level):
-    """상위 레벨 반환"""
-    level_map = {
-        'level2': 'level1',
-        'level3': 'level2', 
-        'level4': 'level3',
-        'level5': 'level4',
-        'level6': 'level5'
-    }
-    return level_map.get(level)
 
-def add_new_component(category_type, level, new_code, name_en, parent_component):
-    """새 컴포넌트를 데이터베이스에 추가"""
-    try:
-        with get_safe_db_connection() as conn:
-            if conn is None:
-                return False
-                
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT INTO multi_category_components 
-                (category_type, level, component_code, component_name_ko, component_name_en, component_name_vi, parent_component, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
-            """, (category_type, level, component_code, name_ko, name_en, name_vi, parent_component or None))
-            
-            conn.commit()
-            return True
-            
-    except Exception as e:
-        st.error(f"데이터베이스 오류: {e}")
-        return False
-    
 def show_category_management_tools():
     """카테고리 관리 도구"""
     
@@ -597,8 +588,7 @@ def show_data_export_tool():
                             for category in export_categories:
                                 cursor.execute("""
                                     SELECT category_type, level, component_code, 
-                                           component_name_ko, component_name_en, component_name_vi,
-                                           parent_component, is_active, created_at, updated_at
+                                           component_name_en, parent_component, is_active, created_at, updated_at
                                     FROM multi_category_components 
                                     WHERE category_type = %s
                                     ORDER BY level, component_code
@@ -610,8 +600,7 @@ def show_data_export_tool():
                     if all_data:
                         df = pd.DataFrame(all_data, columns=[
                             'category_type', 'level', 'component_code',
-                            'component_name_ko', 'component_name_en', 'component_name_vi',
-                            'parent_component', 'is_active', 'created_at', 'updated_at'
+                            'component_name_en', 'parent_component', 'is_active', 'created_at', 'updated_at'
                         ])
                         
                         # 형식에 따라 다운로드
@@ -624,7 +613,6 @@ def show_data_export_tool():
                                 "text/csv"
                             )
                         elif export_format == "Excel":
-                            # Excel 내보내기는 추후 구현
                             st.info("Excel 내보내기는 준비 중입니다.")
                         elif export_format == "JSON":
                             json_data = df.to_json(orient='records', force_ascii=False, indent=2)
@@ -662,25 +650,13 @@ def show_data_import_tool():
             df = pd.read_csv(uploaded_file, encoding='utf-8')
             
             st.markdown("##### 📋 업로드된 데이터 미리보기")
-            st.dataframe(df.head(), use_container_width=True)
+            st.dataframe(df.head(), width=None)
             
             st.markdown(f"**총 {len(df)}개 레코드**")
             
-            # 필수 컬럼 확인
-            required_columns = [
-                'category_type', 'level', 'component_code',
-                'component_name_ko', 'component_name_en', 'component_name_vi'
-            ]
-            
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            
-            if missing_columns:
-                st.error(f"❌ 필수 컬럼이 누락되었습니다: {', '.join(missing_columns)}")
-            else:
-                if st.button("📥 데이터 가져오기", type="primary"):
-                    with st.spinner("데이터를 가져오는 중..."):
-                        # 실제 가져오기 구현은 추후 진행
-                        st.info("🔧 데이터 가져오기 기능은 준비 중입니다.")
+            if st.button("📥 데이터 가져오기", type="primary"):
+                with st.spinner("데이터를 가져오는 중..."):
+                    st.info("🔧 데이터 가져오기 기능은 준비 중입니다.")
         
         except Exception as e:
             st.error(f"파일 읽기 오류: {e}")
@@ -805,7 +781,7 @@ def show_statistics_report():
         st.bar_chart(df_chart.set_index('카테고리')[['활성', '비활성']])
         
         # 상세 테이블
-        st.dataframe(df_chart, use_container_width=True, hide_index=True)
+        st.dataframe(df_chart, width=None, hide_index=True)
     
     else:
         st.info("통계 데이터를 불러올 수 없습니다.")
@@ -916,7 +892,7 @@ def show_supplier_list():
         filtered_df = filtered_df[filtered_df['상태'] == status_filter]
     
     # 결과 표시
-    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+    st.dataframe(filtered_df, width=None, hide_index=True)
 
 def show_add_supplier_form():
     """새 공급업체 등록 폼"""
@@ -1033,7 +1009,7 @@ def show_system_status():
             "값": ["3.11.0", "1.28.0", "15.3", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "2일 14시간"]
         }
         
-        st.dataframe(pd.DataFrame(info_data), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(info_data), hide_index=True, width=None)
 
 def show_performance_metrics():
     """성능 지표"""
@@ -1080,8 +1056,6 @@ def show_error_logs():
         {"시간": "2024-01-15 14:30:25", "레벨": "ERROR", "메시지": "데이터베이스 연결 실패: 타임아웃"},
         {"시간": "2024-01-15 14:25:10", "레벨": "WARNING", "메시지": "캐시 만료: get_components_cached"},
         {"시간": "2024-01-15 14:20:05", "레벨": "INFO", "메시지": "새 사용자 로그인: user123"},
-        {"시간": "2024-01-15 14:15:30", "레벨": "ERROR", "메시지": "SQL 쿼리 오류: 테이블 'temp_table' 존재하지 않음"},
-        {"시간": "2024-01-15 14:10:15", "레벨": "WARNING", "메시지": "연결 풀 사용률 높음: 85%"},
     ]
     
     df_logs = pd.DataFrame(sample_logs)
@@ -1137,18 +1111,6 @@ def show_maintenance_tools():
         
         if st.button("🔧 인덱스 최적화"):
             st.info("🔧 인덱스 최적화는 준비 중입니다.")
-    
-    # 시스템 재시작 (위험한 작업)
-    st.markdown("##### ⚠️ 위험한 작업")
-    
-    with st.expander("🚨 시스템 재시작"):
-        st.warning("⚠️ 이 작업은 모든 사용자의 세션을 종료시킵니다.")
-        
-        restart_confirm = st.text_input("확인을 위해 'RESTART'를 입력하세요:")
-        
-        if restart_confirm == "RESTART":
-            if st.button("🔄 시스템 재시작", type="primary"):
-                st.error("🚨 시스템 재시작 기능은 보안상 비활성화되어 있습니다.")
 
 # ================================================================================
 # 메인 실행부
