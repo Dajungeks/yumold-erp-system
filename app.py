@@ -8,6 +8,9 @@ import locale
 import sys
 import time
 import logging
+from office_supplies_manager import OfficeSuppliesManager
+import os
+from dotenv import load_dotenv
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -298,6 +301,14 @@ def get_note_manager_cached():
         logger.error(f"Note manager cache error: {e}")
         return None
 
+@st.cache_resource
+def get_office_supplies_manager_cached():
+    """사무용품 관리 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    try:
+        return OfficeSuppliesManager()
+    except Exception as e:
+        print(f"⚠️ 사무용품 관리 매니저 초기화 오류: {e}")
+        return None
 # ================================================================================
 # 언어 및 유틸리티 함수들
 # ================================================================================
@@ -381,7 +392,7 @@ def check_access_level(required_level, user_access_level):
 def check_menu_access(menu_key, user_access_level):
     """메뉴별 접근 권한 확인"""
     menu_permissions = {
-        # 모든 사용자 접근 가능
+        # 기존 권한들...
         'dashboard': 'user',
         'work_report_management': 'user',
         'work_status_management': 'user',
@@ -393,12 +404,12 @@ def check_menu_access(menu_key, user_access_level):
         
         # 총무 이상 접근 가능
         'admin_management': 'admin',
-        'office_purchase_management': 'admin',  # 8-Office 구매 안정화-1 추가
+        'office_supplies_management': 'admin',  # 사무용품 관리 추가
         
         # 법인장과 마스터만 접근 가능
         'executive_management': 'ceo',
         
-        # 서브메뉴들
+        # 서브메뉴들 (기존 코드 유지)
         'customer_management': 'user',
         'quotation_management': 'user',
         'order_management': 'user',
@@ -1155,18 +1166,18 @@ def show_page_for_menu(system_key):
                 if st.button("👥 직원 관리", use_container_width=True):
                     st.session_state.selected_system = "employee_management"
                     st.rerun()
-                if st.button("🖥️ 사무용품 구매", use_container_width=True):  # 8-Office 구매 안정화-1
-                    st.session_state.selected_system = "office_purchase_management"
-                    st.rerun()
-            with col2:
                 if st.button(f"🏢 {get_text('asset_management')}", use_container_width=True):
                     st.session_state.selected_system = "asset_management"
                     st.rerun()
+            with col2:
                 if st.button(f"📋 {get_text('contract_management')}", use_container_width=True):
                     st.session_state.selected_system = "contract_management"
                     st.rerun()
                 if st.button(f"🛒 {get_text('purchase_product_registration')}", use_container_width=True):
                     st.session_state.selected_system = "purchase_management"
+                    st.rerun()
+                if st.button("📦 사무용품 관리", use_container_width=True):  # 새로 추가
+                    st.session_state.selected_system = "office_supplies_management"
                     st.rerun()
             with col3:
                 if st.button(f"📅 {get_text('admin_schedule_management')}", use_container_width=True):
@@ -1184,7 +1195,7 @@ def show_page_for_menu(system_key):
             
     except Exception as e:
         st.error(f"페이지 로딩 중 오류: {str(e)}")
-        logger.error(f"Page loading error for {system_key}: {e}")
+        st.exception(e)
 
 # ================================================================================
 # 메인 함수
@@ -1486,3 +1497,287 @@ def generate_office_purchase_report(start_date, end_date):
     except Exception as e:
         logger.error(f"Office purchase report generation error: {e}")
         return {"error": f"보고서 생성 중 오류: {e}"}
+def show_office_supplies_page():
+    """사무용품 관리 페이지"""
+    st.title("📦 사무용품 관리")
+    
+    # 매니저 인스턴스 가져오기
+    manager = get_office_supplies_manager_cached()
+    if not manager:
+        st.error("사무용품 관리 시스템을 사용할 수 없습니다. Supabase 연결을 확인해주세요.")
+        st.info("환경변수 SUPABASE_URL과 SUPABASE_KEY가 설정되어 있는지 확인하세요.")
+        return
+    
+    # 탭으로 기능 구분
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 구매 신청", "📋 신청 내역", "🛒 발주 관리", "📊 대시보드"])
+    
+    with tab1:
+        show_purchase_request_form(manager)
+    
+    with tab2:
+        show_purchase_requests_list(manager)
+    
+    with tab3:
+        show_purchase_orders_list(manager)
+    
+    with tab4:
+        show_office_supplies_dashboard(manager)
+
+def show_purchase_request_form(manager):
+    """구매 신청 폼"""
+    st.subheader("새 구매 신청")
+    
+    with st.form("purchase_request_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            requester_name = st.text_input("신청자명", value=st.session_state.get('user_name', ''))
+            department = st.text_input("부서", placeholder="예: 개발팀")
+        
+        with col2:
+            urgency = st.selectbox("긴급도", ["normal", "urgent", "low"], 
+                                 format_func=lambda x: {"normal": "보통", "urgent": "긴급", "low": "낮음"}[x])
+        
+        reason = st.text_area("신청 사유", placeholder="구매가 필요한 이유를 입력하세요")
+        
+        # 품목 선택
+        st.subheader("구매 품목")
+        
+        # 카테고리별 품목 조회
+        categories = manager.get_categories()
+        if not categories.empty:
+            category_options = dict(zip(categories['id'], categories['name']))
+            selected_category = st.selectbox("카테고리 선택", options=list(category_options.keys()),
+                                           format_func=lambda x: category_options[x])
+            
+            items = manager.get_items(selected_category)
+            
+            if not items.empty:
+                # 동적으로 품목 추가
+                if 'request_items' not in st.session_state:
+                    st.session_state.request_items = []
+                
+                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                with col1:
+                    item_options = dict(zip(items['id'], items['name']))
+                    selected_item = st.selectbox("품목 선택", options=list(item_options.keys()),
+                                               format_func=lambda x: item_options[x])
+                with col2:
+                    quantity = st.number_input("수량", min_value=1, value=1)
+                with col3:
+                    # 기본 단가 표시
+                    default_price = items[items['id'] == selected_item]['standard_price'].iloc[0] if not items.empty else 0
+                    unit_price = st.number_input("단가", min_value=0.0, value=float(default_price))
+                with col4:
+                    if st.button("추가", key="add_item"):
+                        item_name = item_options[selected_item]
+                        st.session_state.request_items.append({
+                            'item_id': selected_item,
+                            'name': item_name,
+                            'quantity': quantity,
+                            'unit_price': unit_price,
+                            'total': quantity * unit_price
+                        })
+                        st.rerun()
+                
+                # 추가된 품목 목록
+                if st.session_state.request_items:
+                    st.subheader("신청 품목 목록")
+                    for i, item in enumerate(st.session_state.request_items):
+                        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
+                        with col1:
+                            st.write(item['name'])
+                        with col2:
+                            st.write(f"{item['quantity']:,}")
+                        with col3:
+                            st.write(f"₩{item['unit_price']:,.0f}")
+                        with col4:
+                            st.write(f"₩{item['total']:,.0f}")
+                        with col5:
+                            if st.button("삭제", key=f"del_{i}"):
+                                st.session_state.request_items.pop(i)
+                                st.rerun()
+                    
+                    total_amount = sum(item['total'] for item in st.session_state.request_items)
+                    st.write(f"**총 금액: ₩{total_amount:,.0f}**")
+        
+        # 제출 버튼
+        submitted = st.form_submit_button("구매 신청 제출", type="primary")
+        
+        if submitted:
+            if not requester_name or not department:
+                st.error("신청자명과 부서는 필수입니다.")
+            elif not st.session_state.get('request_items'):
+                st.error("최소 1개 이상의 품목을 추가해주세요.")
+            else:
+                # 구매 신청 생성
+                items_data = []
+                for item in st.session_state.request_items:
+                    items_data.append({
+                        'item_id': item['item_id'],
+                        'quantity': item['quantity'],
+                        'unit_price': item['unit_price']
+                    })
+                
+                request_id = manager.create_purchase_request(
+                    requester_name=requester_name,
+                    department=department,
+                    items=items_data,
+                    reason=reason,
+                    urgency=urgency
+                )
+                
+                if request_id > 0:
+                    st.success(f"구매 신청이 완료되었습니다! (신청번호: {request_id})")
+                    st.session_state.request_items = []  # 목록 초기화
+                    st.rerun()
+                else:
+                    st.error("구매 신청 처리 중 오류가 발생했습니다.") 
+def show_purchase_requests_list(manager):
+    """구매 신청 내역"""
+    st.subheader("구매 신청 내역")
+    
+    # 필터
+    col1, col2 = st.columns(2)
+    with col1:
+        status_filter = st.selectbox("상태 필터", ["전체", "pending", "approved", "rejected", "completed"],
+                                   format_func=lambda x: {"전체": "전체", "pending": "대기중", "approved": "승인됨", 
+                                                         "rejected": "거부됨", "completed": "완료됨"}[x])
+    
+    # 데이터 조회
+    status = None if status_filter == "전체" else status_filter
+    requests = manager.get_purchase_requests(status)
+    
+    if not requests.empty:
+        # 상태 한글화
+        requests['status_kr'] = requests['status'].map({
+            'pending': '대기중', 'approved': '승인됨', 'rejected': '거부됨', 'completed': '완료됨'
+        })
+        
+        # 데이터 표시
+        for _, req in requests.iterrows():
+            with st.expander(f"신청번호 {req['id']} - {req['requester_name']} ({req['status_kr']})"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write(f"**신청자:** {req['requester_name']}")
+                    st.write(f"**부서:** {req['department']}")
+                with col2:
+                    st.write(f"**신청일:** {req['request_date']}")
+                    st.write(f"**긴급도:** {req['urgency']}")
+                with col3:
+                    st.write(f"**총 금액:** ₩{req['total_amount']:,.0f}")
+                    st.write(f"**상태:** {req['status_kr']}")
+                
+                if req['reason']:
+                    st.write(f"**신청 사유:** {req['reason']}")
+                
+                # 상세 정보 버튼
+                if st.button(f"상세보기", key=f"detail_{req['id']}"):
+                    show_request_detail(manager, req['id'])
+                
+                # 승인/거부 버튼 (총무 이상만)
+                if req['status'] == 'pending' and st.session_state.get('access_level') in ['admin', 'ceo', 'master']:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button(f"승인", key=f"approve_{req['id']}", type="primary"):
+                            if manager.approve_request(req['id'], st.session_state.get('user_name', 'unknown')):
+                                st.success("승인되었습니다!")
+                                st.rerun()
+                    with col2:
+                        if st.button(f"거부", key=f"reject_{req['id']}"):
+                            if manager.reject_request(req['id'], st.session_state.get('user_name', 'unknown')):
+                                st.success("거부되었습니다!")
+                                st.rerun()
+    else:
+        st.info("신청 내역이 없습니다.")
+
+def show_request_detail(manager, request_id):
+    """구매 신청 상세 정보"""
+    details = manager.get_request_details(request_id)
+    
+    if details['request'] and details['items']:
+        st.subheader(f"신청번호 {request_id} 상세 정보")
+        
+        # 기본 정보
+        req = details['request']
+        st.write(f"**신청자:** {req['requester_name']}")
+        st.write(f"**부서:** {req['department']}")
+        st.write(f"**신청일:** {req['request_date']}")
+        st.write(f"**총 금액:** ₩{req['total_amount']:,.0f}")
+        
+        # 품목 정보
+        st.subheader("신청 품목")
+        import pandas as pd
+        items_df = pd.DataFrame(details['items'])
+        items_df['총액'] = items_df['quantity'] * items_df['unit_price']
+        
+        st.dataframe(
+            items_df[['item_name', 'quantity', 'unit_price', '총액', 'notes']],
+            column_config={
+                'item_name': '품목명',
+                'quantity': '수량',
+                'unit_price': st.column_config.NumberColumn('단가', format="₩%.0f"),
+                '총액': st.column_config.NumberColumn('총액', format="₩%.0f"),
+                'notes': '비고'
+            },
+            hide_index=True
+        )
+
+def show_purchase_orders_list(manager):
+    """발주 관리"""
+    st.subheader("발주 관리")
+    
+    orders = manager.get_purchase_orders()
+    
+    if not orders.empty:
+        for _, order in orders.iterrows():
+            with st.expander(f"발주번호 {order['id']} - {order['supplier']}"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write(f"**공급업체:** {order['supplier']}")
+                    st.write(f"**신청자:** {order['requester_name']}")
+                with col2:
+                    st.write(f"**발주일:** {order['order_date']}")
+                    st.write(f"**부서:** {order['department']}")
+                with col3:
+                    st.write(f"**총 금액:** ₩{order['total_amount']:,.0f}")
+                    st.write(f"**상태:** {order['status']}")
+    else:
+        st.info("발주 내역이 없습니다.")
+
+def show_office_supplies_dashboard(manager):
+    """대시보드"""
+    st.subheader("사무용품 구매 현황")
+    
+    from datetime import datetime
+    now = datetime.now()
+    summary = manager.get_monthly_summary(now.year, now.month)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("이번달 신청", f"{summary['request_count']}건")
+    with col2:
+        st.metric("신청 금액", f"₩{summary['request_amount']:,.0f}")
+    with col3:
+        st.metric("이번달 발주", f"{summary['order_count']}건")
+    with col4:
+        st.metric("발주 금액", f"₩{summary['order_amount']:,.0f}")
+    
+    # 최근 신청 내역
+    st.subheader("최근 신청 내역")
+    recent_requests = manager.get_purchase_requests()
+    if not recent_requests.empty:
+        recent_requests = recent_requests.head(5)
+        st.dataframe(
+            recent_requests[['id', 'requester_name', 'department', 'request_date', 'total_amount', 'status']],
+            column_config={
+                'id': '신청번호',
+                'requester_name': '신청자',
+                'department': '부서',
+                'request_date': '신청일',
+                'total_amount': st.column_config.NumberColumn('금액', format="₩%.0f"),
+                'status': '상태'
+            },
+            hide_index=True
+        )                       
