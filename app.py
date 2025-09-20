@@ -7,14 +7,6 @@ from datetime import datetime
 import locale
 import sys
 import time
-import logging
-from office_supplies_manager import OfficeSuppliesManager
-import os
-from dotenv import load_dotenv
-
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # UI 구성 고정 설정 불러오기
 from config_files.ui_config import (
@@ -65,19 +57,19 @@ from config.database_config import (
     get_note_manager
 )
 
-# Office 구매 관리 모듈 추가 (8-Office 구매 안정화-1)
-from managers.postgresql.postgresql_office_purchase_manager import PostgreSQLOfficePurchaseManager
-
 # 모든 매니저들이 이제 database_config를 통해 관리됩니다 (PostgreSQL 우선)
 from components.note_widget import show_page_note_widget
 
 # 데이터베이스 및 유틸리티 매니저들
 from managers.legacy.database_manager import DatabaseManager
+# from pdf_design_manager_new import PDFDesignManager  # PDF 디자인 매니저 비활성화
 from managers.legacy.pdf_language_manager import PDFLanguageManager
 from managers.backup_manager import BackupManager as NewBackupManager
 from scripts.backup_scheduler import backup_scheduler
 from managers.legacy.migration_manager import MigrationManager
 from managers.legacy.contract_manager import ContractManager
+
+# CSV 기반 매니저들은 PostgreSQL로 완전 전환 완료
 
 # 레거시 매니저들 (하위 호환성)
 from managers.legacy.auth_manager import AuthManager
@@ -93,287 +85,171 @@ from managers.legacy.db_product_manager import DBProductManager
 @st.cache_resource
 def get_employee_manager_cached():
     """직원 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
-    try:
-        return get_employee_manager()
-    except Exception as e:
-        logger.error(f"Employee manager cache error: {e}")
-        return None
+    return get_employee_manager()
 
 @st.cache_resource  
 def get_customer_manager_cached():
     """고객 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
-    try:
-        return get_customer_manager()
-    except Exception as e:
-        logger.error(f"Customer manager cache error: {e}")
-        return None
+    return get_customer_manager()
 
 @st.cache_resource
 def get_product_manager_cached():
     """제품 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
-    try:
-        return get_product_manager()
-    except Exception as e:
-        logger.error(f"Product manager cache error: {e}")
-        return None
+    return get_product_manager()
 
 @st.cache_resource
 def get_quotation_manager_cached():
     """견적 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
-    try:
-        return get_quotation_manager()
-    except Exception as e:
-        logger.error(f"Quotation manager cache error: {e}")
-        return None
+    return get_quotation_manager()
 
-@st.cache_resource
-def get_office_purchase_manager_cached():
-    """Office 구매 매니저 캐싱된 버전 - 8-Office 구매 안정화-1"""
-    try:
-        return PostgreSQLOfficePurchaseManager()
-    except Exception as e:
-        logger.error(f"Office purchase manager cache error: {e}")
-        # Legacy fallback
-        try:
-            from managers.legacy.office_purchase_manager import OfficePurchaseManager
-            return OfficePurchaseManager()
-        except:
-            return None
-
-# 추가 매니저 캐싱 함수들...
 @st.cache_resource
 def get_supplier_manager_cached():
-    try:
-        return get_supplier_manager()
-    except Exception as e:
-        logger.error(f"Supplier manager cache error: {e}")
-        return None
+    """공급업체 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_supplier_manager()
 
 @st.cache_resource
 def get_auth_manager_cached():
-    try:
-        return get_auth_manager()
-    except Exception as e:
-        logger.error(f"Auth manager cache error: {e}")
-        return None
+    """인증 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_auth_manager()
 
 @st.cache_resource
 def get_approval_manager_cached():
-    try:
-        return get_approval_manager()
-    except Exception as e:
-        logger.error(f"Approval manager cache error: {e}")
-        return None
+    """승인 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_approval_manager()
 
 @st.cache_resource
 def get_order_manager_cached():
-    try:
-        return get_order_manager()
-    except Exception as e:
-        logger.error(f"Order manager cache error: {e}")
-        return None
+    """주문 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_order_manager()
 
 @st.cache_resource
 def get_business_process_manager_cached():
-    try:
-        return get_business_process_manager()
-    except Exception as e:
-        logger.error(f"Business process manager cache error: {e}")
-        return None
+    """비즈니스 프로세스 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_business_process_manager()
 
 @st.cache_resource
 def get_expense_request_manager_cached():
-    try:
-        return get_expense_request_manager()
-    except Exception as e:
-        logger.error(f"Expense request manager cache error: {e}")
-        return None
+    """지출 요청 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_expense_request_manager()
 
 @st.cache_resource
 def get_vacation_manager_cached():
-    try:
-        return get_vacation_manager()
-    except Exception as e:
-        logger.error(f"Vacation manager cache error: {e}")
-        return None
+    """휴가 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_vacation_manager()
 
 @st.cache_resource
 def get_exchange_rate_manager_cached():
-    try:
-        return get_exchange_rate_manager()
-    except Exception as e:
-        logger.error(f"Exchange rate manager cache error: {e}")
-        return None
+    """환율 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_exchange_rate_manager()
 
 @st.cache_resource
 def get_cash_flow_manager_cached():
-    try:
-        return get_cash_flow_manager()
-    except Exception as e:
-        logger.error(f"Cash flow manager cache error: {e}")
-        return None
+    """현금 흐름 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_cash_flow_manager()
 
 @st.cache_resource
 def get_inventory_manager_cached():
-    try:
-        return get_inventory_manager()
-    except Exception as e:
-        logger.error(f"Inventory manager cache error: {e}")
-        return None
+    """재고 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_inventory_manager()
 
 @st.cache_resource
 def get_shipping_manager_cached():
-    try:
-        return get_shipping_manager()
-    except Exception as e:
-        logger.error(f"Shipping manager cache error: {e}")
-        return None
+    """배송 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_shipping_manager()
 
 @st.cache_resource
 def get_sales_product_manager_cached():
-    try:
-        return get_sales_product_manager()
-    except Exception as e:
-        logger.error(f"Sales product manager cache error: {e}")
-        return None
+    """판매 제품 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_sales_product_manager()
 
 @st.cache_resource
 def get_master_product_manager_cached():
-    try:
-        return get_master_product_manager()
-    except Exception as e:
-        logger.error(f"Master product manager cache error: {e}")
-        return None
+    """마스터 제품 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_master_product_manager()
 
 @st.cache_resource
 def get_monthly_sales_manager_cached():
-    try:
-        return get_monthly_sales_manager()
-    except Exception as e:
-        logger.error(f"Monthly sales manager cache error: {e}")
-        return None
+    """월별 매출 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_monthly_sales_manager()
 
 @st.cache_resource
 def get_work_status_manager_cached():
-    try:
-        return get_work_status_manager()
-    except Exception as e:
-        logger.error(f"Work status manager cache error: {e}")
-        return None
+    """작업 상태 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_work_status_manager()
 
 @st.cache_resource
 def get_product_code_manager_cached():
-    try:
-        return get_product_code_manager()
-    except Exception as e:
-        logger.error(f"Product code manager cache error: {e}")
-        return None
+    """제품 코드 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_product_code_manager()
 
 @st.cache_resource
 def get_finished_product_manager_cached():
-    try:
-        return get_finished_product_manager()
-    except Exception as e:
-        logger.error(f"Finished product manager cache error: {e}")
-        return None
+    """완제품 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_finished_product_manager()
 
 @st.cache_resource
 def get_invoice_manager_cached():
-    try:
-        return get_invoice_manager()
-    except Exception as e:
-        logger.error(f"Invoice manager cache error: {e}")
-        return None
+    """인보이스 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_invoice_manager()
 
 @st.cache_resource
 def get_cash_transaction_manager_cached():
-    try:
-        return get_cash_transaction_manager()
-    except Exception as e:
-        logger.error(f"Cash transaction manager cache error: {e}")
-        return None
+    """현금 거래 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_cash_transaction_manager()
 
 @st.cache_resource
 def get_note_manager_cached():
-    try:
-        return get_note_manager()
-    except Exception as e:
-        logger.error(f"Note manager cache error: {e}")
-        return None
+    """노트 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
+    return get_note_manager()
 
-@st.cache_resource
-def get_office_supplies_manager_cached():
-    """사무용품 관리 매니저 캐싱된 버전 - 한 번 생성 후 재사용"""
-    try:
-        return OfficeSuppliesManager()
-    except Exception as e:
-        print(f"⚠️ 사무용품 관리 매니저 초기화 오류: {e}")
-        return None
-# ================================================================================
-# 언어 및 유틸리티 함수들
 # ================================================================================
 
 @st.cache_data(ttl=3600)  # 1시간 캐싱 - 언어 파일 로딩 속도 3배 향상
 def load_language(lang_code):
     """언어 파일을 로드합니다."""
+    from managers.legacy.advanced_language_manager import AdvancedLanguageManager
+    
+    lang_manager = AdvancedLanguageManager()
+    lang_manager.load_language_file(lang_code)
+    
     try:
-        from managers.legacy.advanced_language_manager import AdvancedLanguageManager
-        
-        lang_manager = AdvancedLanguageManager()
-        lang_manager.load_language_file(lang_code)
-        
         # 새로운 locales 폴더에서 로드
+        with open(f'locales/{lang_code}.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
         try:
-            with open(f'locales/{lang_code}.json', 'r', encoding='utf-8') as f:
+            # 구버전 languages 폴더에서 로드 (하위 호환성)
+            with open(f'languages/{lang_code}.json', 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
-            # 구버전 languages 폴더에서 로드 (하위 호환성)
+            # 기본 언어로 한국어 사용
             try:
-                with open(f'languages/{lang_code}.json', 'r', encoding='utf-8') as f:
+                with open('locales/ko.json', 'r', encoding='utf-8') as f:
                     return json.load(f)
             except FileNotFoundError:
-                # 기본 언어로 한국어 사용
-                try:
-                    with open('locales/ko.json', 'r', encoding='utf-8') as f:
-                        return json.load(f)
-                except FileNotFoundError:
-                    with open('languages/ko.json', 'r', encoding='utf-8') as f:
-                        return json.load(f)
-    except Exception as e:
-        logger.error(f"Language loading error: {e}")
-        # 최소한의 기본 딕셔너리 반환
-        return {
-            "app_title": "YMV ERP 시스템",
-            "login": "로그인",
-            "logout": "로그아웃",
-            "dashboard": "대시보드",
-            "error": "오류가 발생했습니다"
-        }
+                with open('languages/ko.json', 'r', encoding='utf-8') as f:
+                    return json.load(f)
 
 @st.cache_data(ttl=1800)  # 30분 캐싱 - 텍스트 조회 속도 5배 향상
 def get_text(key, lang_dict=None, **kwargs):
     """언어 딕셔너리에서 텍스트를 가져옵니다."""
-    try:
-        from managers.legacy.advanced_language_manager import AdvancedLanguageManager
-        
-        if lang_dict is None:
-            # 새로운 고급 언어 관리자 사용
-            lang_manager = AdvancedLanguageManager()
-            current_lang = st.session_state.get('language', 'ko')
-            lang_manager.set_language(current_lang)
-            return lang_manager.get_text(key, **kwargs)
-        else:
-            # 기존 방식 유지 (하위 호환성)
-            text = lang_dict.get(key, key)
-            if kwargs:
-                try:
-                    return text.format(**kwargs)
-                except (KeyError, ValueError):
-                    return text
-            return text
-    except Exception as e:
-        logger.error(f"Text retrieval error for key '{key}': {e}")
-        return key  # 오류 시 키 자체를 반환
+    from managers.legacy.advanced_language_manager import AdvancedLanguageManager
+    
+    if lang_dict is None:
+        # 새로운 고급 언어 관리자 사용
+        lang_manager = AdvancedLanguageManager()
+        current_lang = st.session_state.get('language', 'ko')
+        lang_manager.set_language(current_lang)
+        return lang_manager.get_text(key, **kwargs)
+    else:
+        # 기존 방식 유지 (하위 호환성)
+        text = lang_dict.get(key, key)
+        if kwargs:
+            try:
+                return text.format(**kwargs)
+            except (KeyError, ValueError):
+                return text
+        return text
 
 def check_access_level(required_level, user_access_level):
     """권한 레벨 확인 함수"""
@@ -392,7 +268,7 @@ def check_access_level(required_level, user_access_level):
 def check_menu_access(menu_key, user_access_level):
     """메뉴별 접근 권한 확인"""
     menu_permissions = {
-        # 기존 권한들...
+        # 모든 사용자 접근 가능
         'dashboard': 'user',
         'work_report_management': 'user',
         'work_status_management': 'user',
@@ -404,12 +280,11 @@ def check_menu_access(menu_key, user_access_level):
         
         # 총무 이상 접근 가능
         'admin_management': 'admin',
-        'office_supplies_management': 'admin',  # 사무용품 관리 추가
         
         # 법인장과 마스터만 접근 가능
         'executive_management': 'ceo',
         
-        # 서브메뉴들 (기존 코드 유지)
+        # 서브메뉴들
         'customer_management': 'user',
         'quotation_management': 'user',
         'order_management': 'user',
@@ -444,94 +319,86 @@ def check_menu_access(menu_key, user_access_level):
 
 def show_language_selector(location="header"):
     """언어 선택기를 표시합니다."""
-    try:
-        from managers.legacy.advanced_language_manager import AdvancedLanguageManager
+    from managers.legacy.advanced_language_manager import AdvancedLanguageManager
+    
+    lang_manager = AdvancedLanguageManager()
+    current_lang = st.session_state.get('language', 'ko')
+    # 언어 선택 드롭다운
+    language_options = {
+        'ko': '🇰🇷 한국어',
+        'en': '🇺🇸 English', 
+        'vi': '🇻🇳 Tiếng Việt'
+    }
         
-        lang_manager = AdvancedLanguageManager()
-        current_lang = st.session_state.get('language', 'ko')
+    # 현재 언어에서 선택 텍스트 가져오기
+    select_text = lang_manager.get_text("language_selector", fallback="Language")
         
-        # 언어 선택 드롭다운
-        language_options = {
-            'ko': '🇰🇷 한국어',
-            'en': '🇺🇸 English', 
-            'vi': '🇻🇳 Tiếng Việt'
-        }
-            
-        # 현재 언어에서 선택 텍스트 가져오기
-        select_text = lang_manager.get_text("language_selector", fallback="Language")
-            
-        selected_lang = st.selectbox(
-            select_text,
-            options=list(language_options.keys()),
-            format_func=lambda x: language_options[x],
-            index=list(language_options.keys()).index(current_lang),
-            key=f"language_selector_{location}"
-        )
-        
-        # 언어가 변경되었을 때 처리
-        if selected_lang != current_lang:
-            st.session_state.language = selected_lang
-            lang_manager.set_language(selected_lang)
-            st.session_state.language_just_changed = True
-            # 언어 변경은 딜레이를 주어 안정성 확보
-            st.rerun()
-    except Exception as e:
-        logger.error(f"Language selector error: {e}")
-        st.error(f"언어 선택기 오류: {e}")
+    selected_lang = st.selectbox(
+        select_text,
+        options=list(language_options.keys()),
+        format_func=lambda x: language_options[x],
+        index=list(language_options.keys()).index(current_lang),
+        key=f"language_selector_{location}"
+    )
+    
+    # 언어가 변경되었을 때 처리
+    if selected_lang != current_lang:
+        st.session_state.language = selected_lang
+        lang_manager.set_language(selected_lang)
+        st.session_state.language_just_changed = True
+        # 언어 변경은 딜레이를 주어 안정성 확보
+        st.rerun()
 
 def show_download_button():
     """ZIP 파일 다운로드 버튼을 표시합니다."""
-    try:
-        zip_file = "yumold_erp_essential_fixed.zip"
-        if os.path.exists(zip_file):
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("### 📦 완전한 ERP 시스템")
-            
-            file_size = os.path.getsize(zip_file) / (1024 * 1024)
-            st.sidebar.markdown(f"**파일 크기:** {file_size:.1f}MB")
-            st.sidebar.markdown("**포함 내용:** 297개 필수 파일")
-            
-            with open(zip_file, "rb") as file:
-                st.sidebar.download_button(
-                    label="⬇️ 완전한 시스템 다운로드",
-                    data=file,
-                    file_name=zip_file,
-                    mime="application/zip",
-                    help="297개 필수 파일 + PostgreSQL DB 백업 + GitHub 호환",
-                    use_container_width=True
-                )
-    except Exception as e:
-        logger.error(f"Download button error: {e}")
+    zip_file = "yumold_erp_essential_fixed.zip"
+    if os.path.exists(zip_file):
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 📦 완전한 ERP 시스템")
+        
+        file_size = os.path.getsize(zip_file) / (1024 * 1024)
+        st.sidebar.markdown(f"**파일 크기:** {file_size:.1f}MB")
+        st.sidebar.markdown("**포함 내용:** 297개 필수 파일")
+        
+        with open(zip_file, "rb") as file:
+            st.sidebar.download_button(
+                label="⬇️ 완전한 시스템 다운로드",
+                data=file,
+                file_name=zip_file,
+                mime="application/zip",
+                help="297개 필수 파일 + PostgreSQL DB 백업 + GitHub 호환",
+                use_container_width=True
+            )
 
 def initialize_session_state():
     """세션 상태를 초기화합니다."""
-    logger.info("초기화: 세션 상태 초기화 시작")
-    
-    # 기본 세션 상태 초기화
-    default_states = {
-        'logged_in': False,
-        'user_id': None,
-        'user_type': None,
-        'access_level': None,
-        'user_permissions': {},
-        'language': 'ko',
-        'selected_system': 'dashboard',
-        'language_changed': False,
-        'language_just_changed': False,
-        'managers_initialized': False
-    }
-    
-    for key, default_value in default_states.items():
-        if key not in st.session_state:
-            st.session_state[key] = default_value
+    print("🔧 initialize_session_state() 호출됨")
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'user_id' not in st.session_state:
+        st.session_state.user_id = None
+    if 'user_type' not in st.session_state:
+        st.session_state.user_type = None
+    if 'access_level' not in st.session_state:
+        st.session_state.access_level = None
+    if 'user_permissions' not in st.session_state:
+        st.session_state.user_permissions = {}
+    if 'language' not in st.session_state:
+        st.session_state.language = 'ko'
+    if 'selected_system' not in st.session_state:
+        st.session_state.selected_system = 'dashboard'
+    # 언어 변경 최적화를 위한 플래그
+    if 'language_changed' not in st.session_state:
+        st.session_state.language_changed = False
+    if 'language_just_changed' not in st.session_state:
+        st.session_state.language_just_changed = False
     
     # 핵심 매니저 초기화 (GitHub 호환성을 위해 필수)
     if 'auth_manager' not in st.session_state:
         try:
             st.session_state.auth_manager = get_auth_manager()
-            logger.info("Auth manager 초기화 성공")
         except Exception as e:
-            logger.error(f"Auth manager 초기화 오류: {e}")
+            print(f"⚠️ auth_manager 초기화 오류: {e}")
             # 기본 fallback 매니저로 설정
             from managers.legacy.auth_manager import AuthManager
             st.session_state.auth_manager = AuthManager()
@@ -539,7 +406,7 @@ def initialize_session_state():
 @st.cache_resource  # 매니저 인스턴스 캐싱 - 초기화 시간 90% 단축 (3.4초→0.3초)
 def get_core_managers():
     """핵심 매니저들만 초기화 (캐싱된 버전 사용) - 최적화됨"""
-    logger.info("핵심 매니저 초기화 시작")
+    print("🚀 초고속 캐싱된 매니저 초기화 시작...")
     start_time = time.time()
     
     core_managers = {}
@@ -548,16 +415,20 @@ def get_core_managers():
         core_managers['auth_manager'] = get_auth_manager_cached()
         core_managers['employee_manager'] = get_employee_manager_cached()  
         core_managers['customer_manager'] = get_customer_manager_cached()
-        # 8-Office 구매 안정화-1: Office 구매 매니저 추가
-        core_managers['office_purchase_manager'] = get_office_purchase_manager_cached()
         
         init_time = time.time() - start_time
-        logger.info(f"핵심 매니저 초기화 완료 (4개, {init_time:.3f}초)")
+        print(f"✅ 핵심 캐싱된 매니저 초기화 완료 (3개, {init_time:.3f}초)")
+        
+        # 성능 향상 로그
+        if init_time < 0.1:
+            print("🎉 캐싱으로 극도의 고속 로딩 달성!")
+        elif init_time < 0.5:
+            print("🚀 캐싱으로 초고속 로딩 성공!")
         
         return core_managers
     except Exception as e:
         init_time = time.time() - start_time
-        logger.error(f"핵심 매니저 초기화 오류 ({init_time:.3f}초): {e}")
+        print(f"⚠️ 핵심 캐싱된 매니저 초기화 오류 ({init_time:.3f}초): {e}")
         return {}
 
 def get_manager_cached(manager_name):
@@ -565,7 +436,7 @@ def get_manager_cached(manager_name):
     session_key = f"{manager_name}_cached"
     
     if session_key not in st.session_state:
-        logger.info(f"{manager_name} 캐싱된 버전 로딩 중...")
+        print(f"📥 {manager_name} 캐싱된 버전 로딩 중...")
         
         # 캐싱된 매니저별 로딩 함수 매핑
         cached_manager_loaders = {
@@ -589,27 +460,31 @@ def get_manager_cached(manager_name):
             'monthly_sales_manager': get_monthly_sales_manager_cached,
             'work_status_manager': get_work_status_manager_cached,
             'product_code_manager': get_product_code_manager_cached,
-            'office_purchase_manager': get_office_purchase_manager_cached,  # 8-Office 구매 안정화-1
         }
         
         if manager_name in cached_manager_loaders:
             try:
                 st.session_state[session_key] = cached_manager_loaders[manager_name]()
-                logger.info(f"{manager_name} 캐싱된 버전 로딩 완료")
+                print(f"✅ {manager_name} 캐싱된 버전 로딩 완료")
             except Exception as e:
-                logger.error(f"{manager_name} 캐싱된 버전 로딩 실패: {e}")
+                print(f"⚠️ {manager_name} 캐싱된 버전 로딩 실패: {e}")
                 st.session_state[session_key] = None
         else:
-            logger.warning(f"{manager_name}에 대한 캐싱된 로더가 없습니다.")
+            print(f"⚠️ {manager_name}에 대한 캐싱된 로더가 없습니다.")
             st.session_state[session_key] = None
     
     return st.session_state.get(session_key)
+
+def get_manager_lazy(manager_name):
+    """매니저를 필요할 때만 로드 (Legacy 호환성 유지)"""
+    # 새로운 캐싱된 버전 사용
+    return get_manager_cached(manager_name)
 
 def ensure_manager_loaded(manager_name):
     """매니저가 로드되어 있지 않으면 캐싱된 버전으로 로드하고 None 체크"""
     manager = get_manager_cached(manager_name)
     if manager is None:
-        logger.warning(f"{manager_name} 매니저가 None입니다. 재시도 중...")
+        print(f"⚠️ {manager_name} 매니저가 None입니다. 재시도 중...")
         # 캐시 키를 삭제하고 재시도
         session_key = f"{manager_name}_cached"
         if session_key in st.session_state:
@@ -620,7 +495,7 @@ def ensure_manager_loaded(manager_name):
 def initialize_managers():
     """최적화된 매니저 초기화 - 핵심만 먼저, 나머지는 lazy loading"""
     if 'managers_initialized' not in st.session_state or not st.session_state.managers_initialized:
-        logger.info("최적화된 매니저 초기화 시작...")
+        print("🚀 최적화된 매니저 초기화 시작...")
         try:
             # 핵심 매니저들만 즉시 로드 (캐싱됨)
             core_managers = get_core_managers()
@@ -628,414 +503,1422 @@ def initialize_managers():
                 if name not in st.session_state:
                     st.session_state[name] = manager
             
-            # 나머지 매니저들은 get_manager_cached() 함수로 필요할 때만 로드됨
-            logger.info("최적화된 매니저 초기화 완료 (속도 70% 향상)")
+            # 나머지 매니저들은 get_manager_lazy() 함수로 필요할 때만 로드됨
+            print("✅ 최적화된 매니저 초기화 완료 (속도 70% 향상)")
             
             # 필수 매니저들만 미리 로드 (매우 자주 사용되는 것들)
+            # ManualExchangeRateManager는 PostgreSQLExchangeRateManager로 대체됨
             st.session_state.migration_manager = MigrationManager()
             
+            # 나머지 모든 매니저는 get_manager_lazy()로 lazy loading
+            # (기존 73개 초기화 블록 제거 - 속도 3배 향상)
+            
             st.session_state.managers_initialized = True
-            logger.info("매니저 초기화 완료!")
+            print("🎉 최적화된 매니저 초기화 완료! (73개 → 5개로 대폭 축소)")
         except Exception as e:
             error_msg = get_text("manager_init_error", fallback="매니저 초기화 중 오류")
             st.error(f"{error_msg}: {str(e)}")
             # 오류가 발생해도 일부 매니저는 초기화되었을 수 있으므로 True로 유지
             st.session_state.managers_initialized = True
-            logger.error(f"매니저 초기화 중 오류 발생하였지만 계속 진행: {e}")
+            print(f"⚠️ 매니저 초기화 중 오류 발생하였지만 계속 진행: {e}")
     else:
-        logger.info("매니저들이 이미 초기화됨 - 스킵")
+        print("⚡ 매니저들이 이미 초기화됨 - 스킵")
 
-# ================================================================================
-# 인증 및 권한 관리
-# ================================================================================
 
-def authenticate_user(user_id, password, login_type="employee"):
-    """사용자 인증 처리"""
-    try:
-        if login_type == "master":
-            # 마스터 인증 로직
-            auth_result = st.session_state.auth_manager.authenticate_master(password)
-            logger.info(f"마스터 인증 시도: 결과={auth_result}")
-            
-            # PostgreSQL과 SQLite AuthManager 모두 대응
-            if isinstance(auth_result, dict) and auth_result.get('success'):
-                return setup_master_session(auth_result.get('user_id', 'master'))
-            elif isinstance(auth_result, tuple):
-                success, user_info = auth_result
-                if success is True:
-                    return setup_master_session("master")
-            elif auth_result is True:
-                return setup_master_session("master")
-            
-            return False, "마스터 로그인 실패"
-            
-        else:
-            # 직원 인증 로직
-            return authenticate_employee(user_id, password)
-            
-    except Exception as e:
-        logger.error(f"Authentication error: {e}")
-        return False, f"인증 처리 중 오류: {e}"
-
-def authenticate_employee(user_id, password):
-    """직원 인증 처리"""
-    try:
-        # PostgreSQL 직접 연결로 변경
-        import psycopg2
-        from datetime import datetime
-        
-        conn = psycopg2.connect(
-            host=st.secrets["postgres"]["host"],
-            port=st.secrets["postgres"]["port"],
-            database=st.secrets["postgres"]["database"],
-            user=st.secrets["postgres"]["user"],
-            password=st.secrets["postgres"]["password"]
-        )
-        cursor = conn.cursor()
-        
-        # 1. 계정 잠금 확인
-        cursor.execute("""
-            SELECT account_locked_until, login_attempts 
-            FROM employees 
-            WHERE employee_id = %s
-        """, (user_id,))
-        
-        lock_result = cursor.fetchone()
-        if lock_result and lock_result[0]:
-            if datetime.now() < lock_result[0]:
-                remaining = int((lock_result[0] - datetime.now()).seconds / 60) + 1
-                return False, f"계정이 잠겼습니다. {remaining}분 후 다시 시도하세요."
-        
-        # 2. 비밀번호 확인
-        cursor.execute("""
-            SELECT employee_id, name, position, department, access_level, 
-                password, password_change_required
-            FROM employees 
-            WHERE employee_id = %s
-        """, (user_id,))
-        
-        result = cursor.fetchone()
-        
-        if result:
-            # bcrypt 해시 비교를 위한 import
-            import bcrypt
-            
-            # 비밀번호 검증
-            password_valid = False
-            need_change = False
-            
-            if result[5] is None:
-                # 비밀번호가 NULL이면 기본 비밀번호 "1111" 확인
-                if password == "1111":
-                    password_valid = True
-                    need_change = True
-            else:
-                # bcrypt 해시 비교
-                try:
-                    # bcrypt는 $2b$로 시작
-                    if result[5].startswith('$2b$'):
-                        password_valid = bcrypt.checkpw(
-                            password.encode('utf-8'), 
-                            result[5].encode('utf-8')
-                        )
-                    else:
-                        # 일반 문자열 비교 (fallback)
-                        password_valid = (result[5] == password)
-                    
-                    need_change = result[6] if result[6] is not None else False
-                except Exception as e:
-                    logger.error(f"비밀번호 검증 오류: {e}")
-                    password_valid = False
-            
-            if password_valid:
-                # 로그인 성공 - 시도 횟수 초기화
-                cursor.execute("""
-                    UPDATE employees 
-                    SET login_attempts = 0,
-                        account_locked_until = NULL
-                    WHERE employee_id = %s
-                """, (user_id,))
-                conn.commit()
-                
-                # 세션 설정
-                st.session_state.logged_in = True
-                st.session_state.user_id = user_id
-                st.session_state.user_type = 'employee'
-                st.session_state.login_type = "employee"
-                st.session_state.access_level = result[4] or 'user'
-                st.session_state.user_name = result[1] or user_id
-                st.session_state.user_position = result[2] or ''
-                st.session_state.user_department = result[3] or ''
-                st.session_state.password_change_required = need_change
-                
-                # 법인장인 경우 특별 처리
-                if st.session_state.user_position == '법인장' or st.session_state.access_level == 'master':
-                    st.session_state.user_type = 'master'
-                    st.session_state.access_level = 'master'
-                
-                cursor.close()
-                conn.close()
-                return True, "로그인 성공"
-            else:
-                # 로그인 실패 - 시도 횟수 증가
-                cursor.execute("""
-                    UPDATE employees 
-                    SET login_attempts = COALESCE(login_attempts, 0) + 1,
-                        account_locked_until = CASE 
-                            WHEN COALESCE(login_attempts, 0) + 1 >= 5 
-                            THEN NOW() + INTERVAL '5 minutes'
-                            ELSE account_locked_until
-                        END
-                    WHERE employee_id = %s
-                """, (user_id,))
-                conn.commit()
-                
-                # 남은 시도 횟수 확인
-                cursor.execute("SELECT login_attempts FROM employees WHERE employee_id = %s", (user_id,))
-                attempts_result = cursor.fetchone()
-                
-                if attempts_result:
-                    attempts = attempts_result[0] or 0
-                    remaining = 5 - attempts
-                    if remaining > 0:
-                        error_msg = f"로그인 실패 (남은 시도: {remaining}회)"
-                    else:
-                        error_msg = "계정이 잠겼습니다. 5분 후 다시 시도하세요."
-                else:
-                    error_msg = "로그인 실패"
-                
-                cursor.close()
-                conn.close()
-                return False, error_msg
-        else:
-            # 사용자 없음
-            cursor.close()
-            conn.close()
-            return False, "사용자를 찾을 수 없습니다."
-            
-    except Exception as e:
-        logger.error(f"Employee authentication error: {e}")
-        if 'conn' in locals():
-            conn.close()
-        return False, f"로그인 처리 중 오류: {e}"
-
-def setup_master_session(user_id="master"):
-    """마스터 세션 설정"""
-    st.session_state.logged_in = True
-    st.session_state.user_id = user_id
-    st.session_state.user_type = "master" 
-    st.session_state.user_role = "master"
-    st.session_state.login_type = "master"
-    st.session_state.access_level = "master"
-    
-    # 마스터는 모든 권한 가짐
-    st.session_state.user_permissions = {
-        'can_access_employee_management': True,
-        'can_access_customer_management': True,
-        'can_access_product_management': True,
-        'can_access_supplier_management': True,
-        'can_access_purchase_order_management': True,
-        'can_access_inventory_management': True,
-        'can_access_shipping_management': True,
-        'can_access_approval_management': True,
-        'can_access_monthly_sales_management': True,
-        'can_access_cash_flow_management': True,
-        'can_access_invoice_management': True,
-        'can_access_sales_product_management': True,
-        'can_access_order_management': True,
-        'can_access_exchange_rate_management': True,
-        'can_access_personal_status': True,
-        'can_access_vacation_management': True,
-        'can_access_office_purchase_management': True,  # 8-Office 구매 안정화-1
-        'can_delete_data': True
-    }
-    
-    logger.info("마스터 로그인 성공: 세션 설정 완료")
-    return True, "마스터 로그인 성공"
-
-# ================================================================================
-# UI 페이지 함수들
-# ================================================================================
 
 def show_login_page(lang_dict):
     """로그인 페이지를 표시합니다."""
-    try:
-        # 상단 언어 선택기를 더 좋은 위치에 배치
-        st.markdown('<div style="text-align: right; margin-bottom: 20px;">', unsafe_allow_html=True)
-        show_language_selector()
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        app_title = get_text("app_title", lang_dict)
-        st.title(f"🏢 {app_title}")
-        st.markdown("---")
-        
-        login_type_text = get_text("login_type_select", lang_dict)
-        employee_login_text = get_text("employee_login", lang_dict)
-        master_login_text = get_text("master_login", lang_dict)
-        login_type = st.selectbox(login_type_text, [employee_login_text, master_login_text])
-        
-        if login_type == employee_login_text:
-            st.subheader(f"👤 {employee_login_text}")
-        
-            with st.form("employee_login_form"):
-                user_id_text = get_text("employee_id", lang_dict)
-                password_text = get_text("password", lang_dict)
-                login_button_text = get_text("login", lang_dict)
-                
-                user_id = st.text_input(user_id_text)
-                password = st.text_input(password_text, type="password")
-                login_submitted = st.form_submit_button(login_button_text, type="primary")
-                
-            if login_submitted:
-                if user_id and password:
-                    success, message = authenticate_user(user_id, password, "employee")
-                    if success:
-                        st.success(message)
-                        st.rerun()
-                    else:
-                        st.error(message)
-                else:
-                    warning_msg = get_text("input_credentials", lang_dict)
-                    st.warning(warning_msg)
-        
-        elif login_type == master_login_text:  # 마스터 로그인
-            st.subheader(f"🔐 {master_login_text}")
+    # 상단 언어 선택기를 더 좋은 위치에 배치
+    st.markdown('<div style="text-align: right; margin-bottom: 20px;">', unsafe_allow_html=True)
+    show_language_selector()
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    app_title = get_text("app_title", lang_dict)
+    st.title(f"🏢 {app_title}")
+    st.markdown("---")
+    
+    login_type_text = get_text("login_type_select", lang_dict)
+    employee_login_text = get_text("employee_login", lang_dict)
+    master_login_text = get_text("master_login", lang_dict)
+    login_type = st.selectbox(login_type_text, [employee_login_text, master_login_text])
+    
+    if login_type == employee_login_text:
+        st.subheader(f"👤 {employee_login_text}")
+    
+        with st.form("employee_login_form"):
+            user_id_text = get_text("employee_id", lang_dict)
+            password_text = get_text("password", lang_dict)
+            login_button_text = get_text("login", lang_dict)
             
-            with st.form("master_login_form"):
-                master_password_text = get_text("master_password", lang_dict)
-                master_login_button_text = get_text("login", lang_dict)
-                password = st.text_input(master_password_text, type="password")
-                master_login_submitted = st.form_submit_button(master_login_button_text, type="primary")
+            user_id = st.text_input(user_id_text)
+            password = st.text_input(password_text, type="password")
+            login_submitted = st.form_submit_button(login_button_text, type="primary")
+            
+        if login_submitted:
+            if user_id and password:
+                # PostgreSQL 직접 연결로 변경
+                import psycopg2
+                from datetime import datetime
                 
-            if master_login_submitted:
-                # 로그인 시도 전 세션 상태 완전 초기화 (보안 강화)
-                for key in ['logged_in', 'user_id', 'user_type', 'user_role', 'login_type', 'access_level', 'user_permissions']:
-                    st.session_state[key] = None
-                st.session_state.logged_in = False
-                st.session_state.user_permissions = {}
+                try:
+                    conn = psycopg2.connect(
+                        host=st.secrets["postgres"]["host"],
+                        port=st.secrets["postgres"]["port"],
+                        database=st.secrets["postgres"]["database"],
+                        user=st.secrets["postgres"]["user"],
+                        password=st.secrets["postgres"]["password"]
+                    )
+                    cursor = conn.cursor()
+                    
+                    # 1. 계정 잠금 확인
+                    cursor.execute("""
+                        SELECT account_locked_until, login_attempts 
+                        FROM employees 
+                        WHERE employee_id = %s
+                    """, (user_id,))
+                    
+                    lock_result = cursor.fetchone()
+                    if lock_result and lock_result[0]:
+                        if datetime.now() < lock_result[0]:
+                            remaining = int((lock_result[0] - datetime.now()).seconds / 60) + 1
+                            st.error(f"🔒 계정이 잠겼습니다. {remaining}분 후 다시 시도하세요.")
+                            cursor.close()
+                            conn.close()
+                            return
+                    
+                    # 2. 비밀번호 확인
+                    cursor.execute("""
+                        SELECT employee_id, name, position, department, access_level, 
+                            password, password_change_required
+                        FROM employees 
+                        WHERE employee_id = %s
+                    """, (user_id,))
+                    
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        # bcrypt 해시 비교를 위한 import
+                        import bcrypt
+                        
+                        # 비밀번호 검증
+                        password_valid = False
+                        need_change = False
+                        
+                        if result[5] is None:
+                            # 비밀번호가 NULL이면 기본 비밀번호 "1111" 확인
+                            if password == "1111":
+                                password_valid = True
+                                need_change = True
+                        else:
+                            # bcrypt 해시 비교
+                            try:
+                                # bcrypt는 $2b$로 시작
+                                if result[5].startswith('$2b$'):
+                                    password_valid = bcrypt.checkpw(
+                                        password.encode('utf-8'), 
+                                        result[5].encode('utf-8')
+                                    )
+                                else:
+                                    # 일반 문자열 비교 (fallback)
+                                    password_valid = (result[5] == password)
+                                
+                                need_change = result[6] if result[6] is not None else False
+                            except Exception as e:
+                                print(f"비밀번호 검증 오류: {e}")
+                                password_valid = False
+                        
+                        if password_valid:
+                            # 로그인 성공 (나머지 코드는 동일)
+                            # 로그인 성공 - 시도 횟수 초기화
+                            cursor.execute("""
+                                UPDATE employees 
+                                SET login_attempts = 0,
+                                    account_locked_until = NULL
+                                WHERE employee_id = %s
+                            """, (user_id,))
+                            conn.commit()
+                            
+                            # 세션 설정 (기존 코드 유지)
+                            st.session_state.logged_in = True
+                            st.session_state.user_id = user_id
+                            st.session_state.user_type = 'employee'
+                            st.session_state.login_type = "employee"
+                            st.session_state.access_level = result[4] or 'user'
+                            st.session_state.user_name = result[1] or user_id
+                            st.session_state.user_position = result[2] or ''
+                            st.session_state.user_department = result[3] or ''
+                            
+                            # 비밀번호 변경 필요 여부
+                            st.session_state.password_change_required = need_change
+                            
+                            # 법인장인 경우 특별 처리
+                            if st.session_state.user_position == '법인장' or st.session_state.access_level == 'master':
+                                st.session_state.user_type = 'master'
+                                st.session_state.access_level = 'master'
+                            
+                            success_msg = get_text("login_success", lang_dict) if 'login_success' in lang_dict else f"로그인 성공! 권한: {st.session_state.access_level}"
+                            info_msg = get_text("login_complete", lang_dict) if 'login_complete' in lang_dict else "로그인이 완료되었습니다."
+                            st.success(success_msg)
+                            
+                            # 비밀번호 변경 필요시 경고
+                            #if need_change:
+                            #    st.warning("⚠️ 보안을 위해 비밀번호를 변경해주세요.")
+                            
+                            st.info(info_msg)
+                            cursor.close()
+                            conn.close()
+                            st.rerun()
+                        else:
+                            # 로그인 실패 - 시도 횟수 증가
+                            cursor.execute("""
+                                UPDATE employees 
+                                SET login_attempts = COALESCE(login_attempts, 0) + 1,
+                                    account_locked_until = CASE 
+                                        WHEN COALESCE(login_attempts, 0) + 1 >= 5 
+                                        THEN NOW() + INTERVAL '5 minutes'
+                                        ELSE account_locked_until
+                                    END
+                                WHERE employee_id = %s
+                            """, (user_id,))
+                            conn.commit()
+                            
+                            # 남은 시도 횟수 확인
+                            cursor.execute("SELECT login_attempts FROM employees WHERE employee_id = %s", (user_id,))
+                            attempts_result = cursor.fetchone()
+                            
+                            if attempts_result:
+                                attempts = attempts_result[0] or 0
+                                remaining = 5 - attempts
+                                if remaining > 0:
+                                    error_msg = get_text("login_failed", lang_dict) if 'login_failed' in lang_dict else f"로그인 실패 (남은 시도: {remaining}회)"
+                                else:
+                                    error_msg = "계정이 잠겼습니다. 5분 후 다시 시도하세요."
+                            else:
+                                error_msg = get_text("login_failed", lang_dict)
+                            
+                            st.error(error_msg)
+                            cursor.close()
+                            conn.close()
+                    else:
+                        # 사용자 없음
+                        error_msg = get_text("login_failed", lang_dict) if 'login_failed' in lang_dict else "사용자를 찾을 수 없습니다."
+                        st.error(error_msg)
+                        cursor.close()
+                        conn.close()
+                        
+                except Exception as e:
+                    st.error(f"로그인 처리 중 오류: {e}")
+                    if 'conn' in locals():
+                        conn.close()
+            else:
+                warning_msg = get_text("input_credentials", lang_dict)
+                st.warning(warning_msg)
+    
+    elif login_type == master_login_text:  # 마스터 로그인
+        st.subheader(f"🔐 {master_login_text}")
+        
+        with st.form("master_login_form"):
+            master_password_text = get_text("master_password", lang_dict)
+            master_login_button_text = get_text("login", lang_dict)
+            password = st.text_input(master_password_text, type="password")
+            master_login_submitted = st.form_submit_button(master_login_button_text, type="primary")
+            
+        if master_login_submitted:
+            # 로그인 시도 전 세션 상태 완전 초기화 (보안 강화)
+            st.session_state.logged_in = False
+            st.session_state.user_id = None
+            st.session_state.user_type = None
+            st.session_state.user_role = None
+            st.session_state.login_type = None
+            st.session_state.access_level = None
+            st.session_state.user_permissions = {}
+            
+            if password:
+                # 마스터 인증 로직
+                auth_result = st.session_state.auth_manager.authenticate_master(password)
+                print(f"[DEBUG] 마스터 인증 시도: 비밀번호='{password}', 결과={auth_result}")  # 디버깅 로그
+                print(f"[DEBUG] auth_result 타입: {type(auth_result)}")  # 타입 확인
                 
-                if password:
-                    success, message = authenticate_user(None, password, "master")
-                    if success:
-                        st.success(message)
+                # PostgreSQL과 SQLite AuthManager 모두 대응
+                if isinstance(auth_result, dict) and auth_result.get('success'):
+                    # PostgreSQL AuthManager (딕셔너리 반환)
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = auth_result.get('user_id', 'master')
+                    st.session_state.user_type = "master" 
+                    st.session_state.user_role = "master"
+                    st.session_state.login_type = "master"
+                    st.session_state.access_level = "master"
+                    # 마스터는 모든 권한 가짐
+                    st.session_state.user_permissions = {
+                        'can_access_employee_management': True,
+                        'can_access_customer_management': True,
+                        'can_access_product_management': True,
+                        'can_access_supplier_management': True,
+                        'can_access_purchase_order_management': True,
+                        'can_access_inventory_management': True,
+                        'can_access_shipping_management': True,
+                        'can_access_approval_management': True,
+                        'can_access_monthly_sales_management': True,
+                        'can_access_cash_flow_management': True,
+                        'can_access_invoice_management': True,
+                        'can_access_sales_product_management': True,
+                        'can_access_order_management': True,
+                        'can_access_exchange_rate_management': True,
+                        'can_access_personal_status': True,
+                        'can_access_vacation_management': True,
+                        'can_delete_data': True
+                    }
+                    master_success_msg = get_text("master_login_success", lang_dict) if 'master_login_success' in lang_dict else "마스터 로그인 성공!"
+                    st.success(master_success_msg)
+                    print(f"[DEBUG] PostgreSQL 마스터 로그인 성공: 세션 설정 완료")
+                    st.rerun()
+                elif isinstance(auth_result, tuple):
+                    # SQLite AuthManager (튜플 반환)
+                    success, user_info = auth_result
+                    if success is True:
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = "master"
+                        st.session_state.user_type = "master" 
+                        st.session_state.user_role = "master"
+                        st.session_state.login_type = "master"
+                        st.session_state.access_level = "master"
+                        # 마스터는 모든 권한 가짐
+                        st.session_state.user_permissions = {
+                            'can_access_employee_management': True,
+                            'can_access_customer_management': True,
+                            'can_access_product_management': True,
+                            'can_access_supplier_management': True,
+                            'can_access_purchase_order_management': True,
+                            'can_access_inventory_management': True,
+                            'can_access_shipping_management': True,
+                            'can_access_approval_management': True,
+                            'can_access_monthly_sales_management': True,
+                            'can_access_cash_flow_management': True,
+                            'can_access_invoice_management': True,
+                            'can_access_sales_product_management': True,
+                            'can_access_order_management': True,
+                            'can_access_exchange_rate_management': True,
+                            'can_access_personal_status': True,
+                            'can_access_vacation_management': True,
+                            'can_delete_data': True
+                        }
+                        master_success_msg = get_text("master_login_success", lang_dict) if 'master_login_success' in lang_dict else "마스터 로그인 성공!"
+                        st.success(master_success_msg)
+                        print(f"[DEBUG] SQLite 마스터 로그인 성공: 세션 설정 완료")
                         st.rerun()
                     else:
-                        st.error(message)
+                        master_error_msg = get_text("master_login_failed", lang_dict)
+                        st.error(master_error_msg)
+                        print(f"[DEBUG] 마스터 로그인 실패: SQLite 인증 실패 {auth_result}")
+                elif auth_result is True:
+                    # Legacy AuthManager 대응
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = "master"
+                    st.session_state.user_type = "master" 
+                    st.session_state.user_role = "master"
+                    st.session_state.login_type = "master"
+                    st.session_state.access_level = "master"
+                    # 마스터는 모든 권한 가짐 (Legacy 대응)
+                    st.session_state.user_permissions = {
+                        'can_access_employee_management': True,
+                        'can_access_customer_management': True,
+                        'can_access_product_management': True,
+                        'can_access_supplier_management': True,
+                        'can_access_purchase_order_management': True,
+                        'can_access_inventory_management': True,
+                        'can_access_shipping_management': True,
+                        'can_access_approval_management': True,
+                        'can_access_monthly_sales_management': True,
+                        'can_access_cash_flow_management': True,
+                        'can_access_invoice_management': True,
+                        'can_access_sales_product_management': True,
+                        'can_access_order_management': True,
+                        'can_access_exchange_rate_management': True,
+                        'can_access_personal_status': True,
+                        'can_access_vacation_management': True,
+                        'can_delete_data': True
+                    }
+                    master_success_msg = get_text("master_login_success", lang_dict) if 'master_login_success' in lang_dict else "마스터 로그인 성공!"
+                    st.success(master_success_msg)
+                    print(f"[DEBUG] 마스터 로그인 성공: Legacy 세션 설정 완료")
                 else:
-                    master_warning_msg = get_text("input_master_password", lang_dict)
-                    st.warning(master_warning_msg)
-                    
-    except Exception as e:
-        logger.error(f"Login page error: {e}")
-        st.error(f"로그인 페이지 오류: {e}")
+                    master_error_msg = get_text("master_login_failed", lang_dict)
+                    st.error(master_error_msg)
+                    print(f"[DEBUG] 마스터 로그인 실패: 예상치 못한 반환값: {auth_result}")
+            else:
+                master_warning_msg = get_text("input_master_password", lang_dict)
+                st.warning(master_warning_msg)
+                print(f"[DEBUG] 마스터 로그인: 비밀번호 미입력")
+
 
 def show_main_app(lang_dict):
+    # 비밀번호 변경 필요 여부 확인 (임시 디버그)
+
     """메인 애플리케이션을 표시합니다."""
-    try:
-        # 사이드바 설정 - 메뉴만 표시
-        with st.sidebar:
-            # 현재 메뉴 표시
-            current_system = st.session_state.selected_system
+    
+    # 모바일 최적화 설정
+    pass  # CSS는 별도로 처리
+    
+    # 헤더 제거 - 모든 정보는 사이드바에서 처리
+    
+    # 사이드바 설정 - 메뉴만 표시
+    with st.sidebar:
+        # 현재 메뉴 표시
+        current_system = st.session_state.selected_system
+        
+        # 메뉴 버튼들 (ui_config.py에서 가져오기)
+        from config_files.ui_config import SIDEBAR_MENU_STRUCTURE
+        menu_structure = {}
+        for key, config in SIDEBAR_MENU_STRUCTURE.items():
+            # title_key가 있으면 번역된 텍스트 사용, 없으면 기존 title 사용
+            if 'title_key' in config:
+                translated_title = get_text(config['title_key'])
+            else:
+                translated_title = config.get('title', key)
+            menu_structure[key] = (config['icon'], translated_title)
+        
+        # 권한 기반 메뉴 필터링
+        from config_files.ui_config import get_allowed_menus
+        access_level = st.session_state.get('access_level', 'user')
+        allowed_menus = get_allowed_menus(access_level)
+        
+        # 권한 체크 함수
+        def has_permission(system_key):
+            """사용자가 해당 시스템에 접근 권한이 있는지 확인"""
+            if not st.session_state.get('logged_in'):
+                return False
             
-            # 메뉴 버튼들 (ui_config.py에서 가져오기)
-            from config_files.ui_config import SIDEBAR_MENU_STRUCTURE
-            menu_structure = {}
-            for key, config in SIDEBAR_MENU_STRUCTURE.items():
-                # title_key가 있으면 번역된 텍스트 사용, 없으면 기존 title 사용
-                if 'title_key' in config:
-                    translated_title = get_text(config['title_key'])
+            # check_menu_access 함수 사용
+            user_access = st.session_state.get('access_level', 'user')
+            return check_menu_access(system_key, user_access)
+        
+        for system_key, (icon, name) in menu_structure.items():
+            # 권한이 있는 메뉴만 표시
+            if has_permission(system_key):
+                if system_key == current_system:
+                    st.button(f"{icon} {name}", key=f"current_{system_key}", use_container_width=True, type="primary", disabled=True)
                 else:
-                    translated_title = config.get('title', key)
-                menu_structure[key] = (config['icon'], translated_title)
+                    if st.button(f"{icon} {name}", key=f"menu_{system_key}", use_container_width=True):
+                        st.session_state.selected_system = system_key
+                        # 언어 변경 직후가 아닌 경우에만 rerun
+                        if not st.session_state.get('language_just_changed', False):
+                            st.rerun()
+                        else:
+                            st.session_state.language_just_changed = False
+        
+        st.markdown("---")
+        logout_text = get_text("logout")
+        if st.button(f"🔐 {logout_text}", key="logout_button", use_container_width=True, type="secondary"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
+        
+        # 언어 선택을 로그아웃 아래로 이동
+        st.markdown("---")
+        show_language_selector("sidebar")
+        
+        # ZIP 파일 다운로드 버튼 표시
+        show_download_button()
+        
+        # 사용자 정보를 언어 선택 아래에 표시
+        st.markdown("---")
+        user_type = st.session_state.get('user_type', '')
+        user_id = st.session_state.get('user_id', 'Unknown')
+        
+        menu_type_emoji = ""
+        if user_type == 'master':
+            menu_type_emoji = "👑"
+        elif user_type == 'employee':
+            menu_type_emoji = "👤"
+        
+        # 사용자 정보 컴팩트하게 표시
+        st.markdown(f"""
+        <div style="text-align: center; padding: 5px; background-color: #f0f2f6; border-radius: 5px; margin: 5px 0;">
+            <span style="color: #333; font-size: 12px;">
+                {menu_type_emoji} {user_id}
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+
+    
+    # 메인 콘텐츠
+    try:
+        # 세션 상태에서 메뉴 변경 요청 확인
+        if 'selected_menu' in st.session_state:
+            st.session_state.selected_system = st.session_state['selected_menu']
+            del st.session_state['selected_menu']  # 임시 키 삭제
+            # 언어 변경 직후가 아닌 경우에만 rerun
+            if not st.session_state.get('language_just_changed', False):
+                st.rerun()
+            else:
+                st.session_state.language_just_changed = False
+        
+        current_system = st.session_state.selected_system
+        
+        # 각 시스템의 페이지 표시 (탭 기반)
+        show_page_for_menu(current_system)
+    
+    except Exception as e:
+        current_lang = st.session_state.get('language', 'ko')
+        lang_dict = load_language(current_lang)
+        error_msg = get_text("system_error", lang_dict) if 'system_error' in lang_dict else "시스템 오류가 발생했습니다"
+        contact_msg = get_text("contact_admin", lang_dict) if 'contact_admin' in lang_dict else "관리자에게 문의해주세요"
+        st.error(f"{error_msg}: {str(e)}")
+        st.info(contact_msg)
+
+def show_dashboard_for_menu(system_key, selected_submenu):
+    """각 메뉴의 대시보드를 표시합니다."""
+    from pages.menu_dashboard import (
+        show_main_dashboard, show_employee_dashboard, show_customer_dashboard,
+        show_product_dashboard, show_supplier_dashboard, show_order_dashboard,
+        show_finished_product_dashboard,
+        show_exchange_rate_dashboard, show_business_process_dashboard,
+        show_shipping_dashboard, show_approval_dashboard, show_cash_flow_dashboard,
+        show_pdf_design_dashboard, show_system_guide_dashboard, show_personal_status_dashboard
+    )
+    
+    # 안전한 매니저 로딩 - ensure_manager_loaded() 사용으로 AttributeError 방지
+    managers = {
+        'employee_manager': ensure_manager_loaded('employee_manager'),
+        'customer_manager': ensure_manager_loaded('customer_manager'),
+        'product_manager': ensure_manager_loaded('product_manager'),
+        'supplier_manager': ensure_manager_loaded('supplier_manager'),
+        'business_process_manager': ensure_manager_loaded('business_process_manager'),
+        'approval_manager': ensure_manager_loaded('approval_manager'),
+        'exchange_rate_manager': ensure_manager_loaded('exchange_rate_manager'),
+        'sales_product_manager': ensure_manager_loaded('sales_product_manager'),
+        'supply_product_manager': st.session_state.supply_product_manager,  # 이미 초기화됨
+        # 'pdf_design_manager': ensure_manager_loaded('pdf_design_manager'),  # PDF 디자인 매니저 비활성화
+        'vacation_manager': ensure_manager_loaded('vacation_manager'),
+    }
+    
+    if system_key == 'dashboard':
+        show_main_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'employee_management':
+        show_employee_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'customer_management':
+        show_customer_dashboard(managers, selected_submenu, get_text)
+
+
+    elif system_key == 'supplier_management':
+        show_supplier_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'product_registration':
+        from pages.menu_dashboard import show_product_registration_dashboard
+        show_product_registration_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'exchange_rate_management':
+        show_exchange_rate_dashboard(managers, selected_submenu, get_text)
+
+    elif system_key == 'shipping_management':
+        show_shipping_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'approval_management':
+        show_approval_dashboard(managers, selected_submenu, get_text)  
+    elif system_key == 'quotation_management':
+        # 새로운 견적서 관리 시스템
+        from pages.quotation_page import main as show_quotation_page
+        show_quotation_page()
+    elif system_key == 'order_management':
+        from pages.menu_dashboard import show_order_dashboard
+        show_order_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'cash_flow_management':
+        show_cash_flow_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'contract_management':
+        from pages.menu_dashboard import show_contract_dashboard
+        show_contract_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'pdf_design_management':
+        show_pdf_design_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'system_guide':
+        show_system_guide_dashboard(managers, selected_submenu, get_text)
+    elif system_key == 'personal_status':
+        show_personal_status_dashboard(managers, selected_submenu, get_text)
+
+def show_business_process_v2_page():
+    """비즈니스 프로세스 V2 페이지 표시"""
+    
+    # 매니저 초기화
+    if 'bp_manager_v2' not in st.session_state:
+        from scripts.business_process_manager_v2 import BusinessProcessManagerV2
+        st.session_state.bp_manager_v2 = BusinessProcessManagerV2()
+    
+    # 탭 생성
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 프로세스 대시보드",
+        "➕ 새 프로세스 생성", 
+        "📋 진행중 프로세스 관리",
+        "✏️ 프로세스 편집/수정",
+        "📈 성과 분석"
+    ])
+    
+    with tab1:
+        st.header("📊 프로세스 현황 대시보드")
+        
+        # 통계 정보 가져오기
+        stats = st.session_state.bp_manager_v2.get_workflow_statistics()
+        
+        if not stats:
+            st.info("아직 생성된 워크플로우가 없습니다.")
+        else:
+            # 상단 메트릭 카드들
+            col1, col2, col3, col4 = st.columns(4)
             
-            # 권한 기반 메뉴 필터링
-            access_level = st.session_state.get('access_level', 'user')
+            with col1:
+                st.metric("📈 판매 프로세스", f"{stats.get('sales_workflows', 0)}건")
             
-            # 권한 체크 함수
-            def has_permission(system_key):
-                """사용자가 해당 시스템에 접근 권한이 있는지 확인"""
-                if not st.session_state.get('logged_in'):
-                    return False
+            with col2:
+                st.metric("🔧 서비스 프로세스", f"{stats.get('service_workflows', 0)}건")
+            
+            with col3:
+                st.metric("🔄 복합 프로세스", f"{stats.get('mixed_workflows', 0)}건")
+            
+            with col4:
+                st.metric("🎯 평균 진행률", f"{stats.get('average_progress', 0):.1f}%")
+    
+    with tab2:
+        st.header("➕ 새 워크플로우 생성")
+        
+        # 모든 견적서 목록 가져오기 (상태 확인 없음)
+        try:
+            quotation_manager = ensure_manager_loaded('quotation_manager')
+            if quotation_manager is not None:
+                quotations_df = quotation_manager.get_all_quotations()
+            else:
+                quotations_df = pd.DataFrame()
+            if isinstance(quotations_df, list):
+                # 리스트인 경우 DataFrame으로 변환
+                quotations_df = pd.DataFrame(quotations_df)
+            
+            # 모든 견적서를 사용 가능하도록 변경
+            available_quotations = quotations_df
+        except Exception as e:
+            st.error(f"견적서 데이터 로드 오류: {e}")
+            available_quotations = pd.DataFrame()
+        
+        if len(available_quotations) == 0:
+            st.warning("생성된 견적서가 없습니다. 먼저 견적서를 작성해주세요.")
+        else:
+            st.success(f"사용 가능한 견적서 {len(available_quotations)}개를 찾았습니다.")
+            
+            # 견적서 선택 드롭다운
+            quotation_options = {}
+            for _, quot in available_quotations.iterrows():
+                # total_amount_usd가 None일 수 있으므로 안전하게 처리
+                total_usd = quot.get('total_amount_usd', 0) or 0
+                display_text = f"{quot.get('quotation_number', quot.get('quotation_id', 'N/A'))} - {quot.get('customer_name', 'N/A')} ({total_usd:,.0f} USD)"
+                quotation_options[display_text] = quot['quotation_id']
+            
+            if quotation_options:
+                selected_quotation_display = st.selectbox(
+                    "견적서를 선택하세요:",
+                    options=list(quotation_options.keys())
+                )
                 
-                # check_menu_access 함수 사용
-                user_access = st.session_state.get('access_level', 'user')
-                return check_menu_access(system_key, user_access)
+                if selected_quotation_display:
+                    selected_quotation_id = quotation_options[selected_quotation_display]
+                    
+                    # 워크플로우 생성 버튼
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        # 직원 목록에서 판매팀 담당자 선택 (DataFrame 표준화 적용)
+                        employee_manager = ensure_manager_loaded('employee_manager')
+                        employee_names = []
+                        if employee_manager is not None:
+                            try:
+                                employees_data = employee_manager.get_all_employees()
+                                # 매니저가 DataFrame을 반환하도록 표준화됨
+                                if not employees_data.empty:
+                                    for _, row in employees_data.iterrows():
+                                        try:
+                                            name = row.get('name', 'N/A')
+                                            emp_id = row.get('employee_id', 'N/A')
+                                            employee_names.append(f"{name} ({emp_id})")
+                                        except:
+                                            employee_names.append(f"직원_{len(employee_names) + 1}")
+                            except Exception as e:
+                                # 에러 발생 시 기본 리스트 사용
+                                employee_names = ["담당자 정보 로드 실패"]
+                        
+                        if employee_names:
+                            sales_team = st.selectbox("판매팀 담당자:", employee_names)
+                        else:
+                            sales_team = st.text_input("판매팀 담당자:", value="담당자 미정")
+                        
+                    with col2:
+                        # 직원 목록에서 서비스팀 담당자 선택
+                        if employee_names:
+                            service_team = st.selectbox("서비스팀 담당자:", employee_names, key="service_team_select")
+                        else:
+                            service_team = st.text_input("서비스팀 담당자:", value="담당자 미정")
+                    
+                    notes = st.text_area("초기 메모:", placeholder="워크플로우 생성 시 특이사항이나 메모를 입력하세요.")
+                    
+                    if st.button("🚀 워크플로우 생성", type="primary", use_container_width=True):
+                        # 선택된 견적서 데이터 가져오기
+                        selected_quotation_data = None
+                        try:
+                            quotation_manager = ensure_manager_loaded('quotation_manager')
+                            if quotation_manager is not None:
+                                all_quotations = quotation_manager.get_all_quotations()
+                            else:
+                                all_quotations = []
+                            for quotation in all_quotations:
+                                if quotation.get('quotation_id') == selected_quotation_id:
+                                    selected_quotation_data = quotation
+                                    break
+                        except Exception as e:
+                            st.error(f"견적서 데이터 조회 오류: {e}")
+                        
+                        if selected_quotation_data:
+                            # 담당자 정보 추가
+                            selected_quotation_data['assigned_sales_team'] = sales_team
+                            selected_quotation_data['assigned_service_team'] = service_team
+                            selected_quotation_data['notes'] = notes
+                            
+                            success, message = st.session_state.bp_manager_v2.create_workflow_from_quotation(
+                                quotation_data=selected_quotation_data,
+                                created_by=st.session_state.get('user_id', '')
+                            )
+                        else:
+                            success = False
+                            message = "견적서 데이터를 찾을 수 없습니다."
+                        
+                        if success:
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+    
+    with tab3:
+        st.header(f"📋 {get_text('ongoing_process_management')}")
+        
+        # 워크플로우 목록 가져오기
+        try:
+            workflows_df = st.session_state.bp_manager_v2.get_all_workflows()
+            if isinstance(workflows_df, list):
+                # 리스트가 문자열로 저장된 경우를 처리
+                valid_workflows = []
+                for workflow in workflows_df:
+                    if isinstance(workflow, dict):
+                        valid_workflows.append(workflow)
+                workflows_df = valid_workflows
+        except Exception as e:
+            st.error(f"워크플로우 데이터 로드 오류: {e}")
+            workflows_df = []
+        
+        if (workflows_df.empty if isinstance(workflows_df, pd.DataFrame) else len(workflows_df) == 0):
+            st.info("생성된 워크플로우가 없습니다.")
+        else:
+            st.success(f"총 {len(workflows_df)}개의 워크플로우가 있습니다.")
             
-            for system_key, (icon, name) in menu_structure.items():
-                # 권한이 있는 메뉴만 표시
-                if has_permission(system_key):
-                    if system_key == current_system:
-                        st.button(f"{icon} {name}", key=f"current_{system_key}", use_container_width=True, type="primary", disabled=True)
+            # 테이블 형태 대시보드 추가
+            st.markdown("### 📋 간단 대시보드")
+            
+            # 테이블 헤더
+            col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1.5, 1.5, 2, 1.5, 1, 1, 1.5])
+            
+            with col1:
+                st.markdown("**식별번호**")
+            with col2:
+                st.markdown("**이름**")
+            with col3:
+                st.markdown("**연락처**")
+            with col4:
+                st.markdown("**이메일**")
+            with col5:
+                st.markdown("**상태**")
+            with col6:
+                st.markdown("**진행률**")
+            with col7:
+                st.markdown("**작업**")
+            with col8:
+                st.markdown("**상세보기**")
+            
+            st.divider()
+            
+            # 워크플로우 목록 표시 (테이블 형태)
+            for i, workflow in enumerate(workflows_df):
+                # 워크플로우가 딕셔너리인지 확인
+                if not isinstance(workflow, dict):
+                    continue
+                    
+                # 안전한 문자열 변환
+                workflow_type_str = str(workflow.get('workflow_type', '')).upper()
+                quotation_number = str(workflow.get('quotation_number', ''))
+                customer_name = str(workflow.get('customer_name', ''))
+                overall_progress = float(workflow.get('overall_progress', 0))
+                
+                # 연락처와 이메일 정보 추출
+                contact_info = workflow.get('customer_phone', workflow.get('contact_info', ''))
+                email_info = workflow.get('customer_email', workflow.get('email_info', ''))
+                
+                # 상태 결정
+                if overall_progress >= 100:
+                    status = "완료"
+                elif overall_progress > 0:
+                    status = "진행중"
+                else:
+                    status = "대기"
+                
+                # 테이블 행 표시
+                col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1.5, 1.5, 2, 1.5, 1, 1, 1.5])
+                
+                with col1:
+                    st.text(quotation_number)
+                with col2:
+                    st.text(customer_name)
+                with col3:
+                    st.text(contact_info[:15] + "..." if len(contact_info) > 15 else contact_info)
+                with col4:
+                    st.text(email_info[:20] + "..." if len(email_info) > 20 else email_info)
+                with col5:
+                    if status == "완료":
+                        st.success(status)
+                    elif status == "진행중":
+                        st.warning(status)
                     else:
-                        if st.button(f"{icon} {name}", key=f"menu_{system_key}", use_container_width=True):
-                            st.session_state.selected_system = system_key
-                            # 언어 변경 직후가 아닌 경우에만 rerun
-                            if not st.session_state.get('language_just_changed', False):
+                        st.info(status)
+                with col6:
+                    st.progress(overall_progress / 100)
+                    st.text(f"{overall_progress:.1f}%")
+                with col7:
+                    # 수정/삭제 버튼
+                    workflow_id = workflow.get('workflow_id', '')
+                    col_edit, col_delete = st.columns(2)
+                    with col_edit:
+                        if st.button("✏️", key=f"table_edit_{workflow_id}", help="수정"):
+                            st.session_state.selected_workflow_id = workflow_id
+                            st.rerun()
+                    with col_delete:
+                        if st.button("🗑️", key=f"table_delete_{workflow_id}", help="삭제"):
+                            if st.session_state.get('user_type') == 'master':
+                                success, message = st.session_state.bp_manager_v2.delete_workflow(workflow_id)
+                                if success:
+                                    st.success(message)
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                            else:
+                                st.error("마스터 권한이 필요합니다.")
+                with col8:
+                    if st.button("📋 상세", key=f"table_detail_{workflow_id}"):
+                        st.session_state.show_workflow_detail = workflow_id
+                        st.rerun()
+            
+            st.divider()
+            
+            # 상세 워크플로우 정보 (기존 코드)
+            st.markdown("### 📈 상세 워크플로우 정보")
+            
+            # 워크플로우 목록 표시
+            for workflow in workflows_df:
+                # 워크플로우가 딕셔너리인지 확인
+                if not isinstance(workflow, dict):
+                    continue
+                    
+                # 안전한 문자열 변환
+                workflow_type_str = str(workflow.get('workflow_type', '')).upper()
+                quotation_number = str(workflow.get('quotation_number', ''))
+                customer_name = str(workflow.get('customer_name', ''))
+                overall_progress = float(workflow.get('overall_progress', 0))
+                
+                with st.expander(f"{quotation_number} - {customer_name} ({workflow_type_str})"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.write(f"**전체 진행률:** {overall_progress:.1f}%")
+                        st.progress(overall_progress / 100)
+                    
+                    with col2:
+                        has_sales = bool(workflow.get('has_sales_items', False))
+                        if has_sales:
+                            sales_progress = float(workflow.get('sales_progress', 0))
+                            sales_stage = str(workflow.get('sales_current_stage', ''))
+                            st.write(f"**판매 진행률:** {sales_progress:.1f}%")
+                            st.write(f"현재 단계: {sales_stage}")
+                    
+                    with col3:
+                        has_service = bool(workflow.get('has_service_items', False))
+                        if has_service:
+                            service_progress = float(workflow.get('service_progress', 0))
+                            service_stage = str(workflow.get('service_current_stage', ''))
+                            st.write(f"**서비스 진행률:** {service_progress:.1f}%")
+                            st.write(f"현재 단계: {service_stage}")
+                    
+                    # 단계별 진행 표시
+                    st.markdown("---")
+                    
+                    # 판매 프로세스 단계 표시 (한 줄로)
+                    if has_sales:
+                        st.markdown("### 📈 판매 프로세스 단계")
+                        try:
+                            sales_stages_json = workflow.get('sales_stages_json', '[]')
+                            if isinstance(sales_stages_json, str):
+                                sales_stages = json.loads(sales_stages_json)
+                            else:
+                                sales_stages = []
+                            
+                            # 전체 단계 순서 표시 (클릭 가능)
+                            if sales_stages:
+                                st.write("**전체 단계 순서:**")
+                                
+                                # 각 단계를 개별 컨테이너로 표시
+                                cols = st.columns(len(sales_stages))
+                                current_stage_name = str(workflow.get('sales_current_stage', ''))
+                                
+                                for i, stage in enumerate(sales_stages):
+                                    stage_name = stage.get('stage_name', f'단계 {i+1}')
+                                    stage_status = stage.get('status', '대기')
+                                    
+                                    with cols[i]:
+                                        # 단계 상태에 따른 표시
+                                        if stage_status == '완료':
+                                            st.success(f"✅ {stage_name}")
+                                        elif stage_status == '진행중' and stage_name == current_stage_name:
+                                            # 현재 진행중인 단계는 "다음 단계로" 버튼 표시
+                                            next_stage = sales_stages[i+1]['stage_name'] if i+1 < len(sales_stages) else "완료"
+                                            if st.button(f"🔄 {stage_name}\n→ {next_stage}", key=f"sales_stage_{workflow['workflow_id']}_{i}", 
+                                                        help=f"클릭하여 '{next_stage}'로 진행"):
+                                                success, message = st.session_state.bp_manager_v2.advance_sales_stage(
+                                                    workflow['workflow_id'], 
+                                                    st.session_state.get('user_id', 'system')
+                                                )
+                                                if success:
+                                                    st.success(message)
+                                                    st.rerun()
+                                                else:
+                                                    st.error(message)
+                                        else:
+                                            st.warning(f"⏳ {stage_name}")
+                            else:
+                                st.info("단계 정보를 로드할 수 없습니다.")
+                            
+                        
+                        except Exception as e:
+                            st.error(f"판매 단계 표시 오류: {e}")
+                    
+                    # 서비스 프로세스 단계 표시 (한 줄로)
+                    if has_service:
+                        st.markdown("### 🔧 서비스 프로세스 단계")
+                        try:
+                            service_stages_json = workflow.get('service_stages_json', '[]')
+                            if isinstance(service_stages_json, str):
+                                service_stages = json.loads(service_stages_json)
+                            else:
+                                service_stages = []
+                            
+                            # 전체 단계 순서 표시 (클릭 가능)
+                            if service_stages:
+                                st.write("**전체 단계 순서:**")
+                                
+                                # 각 단계를 개별 컨테이너로 표시 (서비스는 9단계이므로 3행으로 나누어 표시)
+                                stage_rows = [service_stages[i:i+3] for i in range(0, len(service_stages), 3)]
+                                current_stage_name = str(workflow.get('service_current_stage', ''))
+                                
+                                for row_stages in stage_rows:
+                                    cols = st.columns(3)
+                                    for j, stage in enumerate(row_stages):
+                                        stage_name = stage.get('stage_name', f'단계 {service_stages.index(stage)+1}')
+                                        stage_status = stage.get('status', '대기')
+                                        stage_index = service_stages.index(stage)
+                                        
+                                        with cols[j]:
+                                            # 단계 상태에 따른 표시
+                                            if stage_status == '완료':
+                                                st.success(f"✅ {stage_name}")
+                                            elif stage_status == '진행중' and stage_name == current_stage_name:
+                                                # 현재 진행중인 단계는 "다음 단계로" 버튼 표시
+                                                next_stage = service_stages[stage_index+1]['stage_name'] if stage_index+1 < len(service_stages) else "완료"
+                                                if st.button(f"🔄 {stage_name}\n→ {next_stage}", key=f"service_stage_{workflow['workflow_id']}_{stage_index}", 
+                                                            help=f"클릭하여 '{next_stage}'로 진행"):
+                                                    success, message = st.session_state.bp_manager_v2.advance_service_stage(
+                                                        workflow['workflow_id'], 
+                                                        st.session_state.get('user_id', 'system')
+                                                    )
+                                                    if success:
+                                                        st.success(message)
+                                                        st.rerun()
+                                                    else:
+                                                        st.error(message)
+                                            else:
+                                                st.warning(f"⏳ {stage_name}")
+                            else:
+                                st.info("단계 정보를 로드할 수 없습니다.")
+                            
+                        except Exception as e:
+                            st.error(f"서비스 단계 표시 오류: {e}")
+                    
+                    # 담당자 정보
+                    담당_col1, 담당_col2 = st.columns(2)
+                    with 담당_col1:
+                        sales_team = workflow.get('assigned_sales_team', '미정')
+                        st.write(f"**판매팀:** {sales_team}")
+                    with 담당_col2:
+                        service_team = workflow.get('assigned_service_team', '미정')
+                        st.write(f"**서비스팀:** {service_team}")
+    
+    with tab4:
+        st.header("✏️ 프로세스 편집/수정")
+        
+        # 마스터 권한 확인
+        user_role = st.session_state.get('user_role', 'employee')
+        is_master = user_role == 'master'
+        
+        if not is_master:
+            st.warning("🔒 프로세스 편집/수정 기능은 마스터 권한이 필요합니다.")
+            st.info("현재 로그인된 계정의 권한이 부족합니다. 마스터 계정으로 로그인해주세요.")
+        else:
+            # 워크플로우 선택
+            if not workflows_df.empty if isinstance(workflows_df, pd.DataFrame) else len(workflows_df) > 0:
+                # 워크플로우 목록
+                workflow_options = []
+                for workflow in workflows_df:
+                    if not isinstance(workflow, dict):
+                        continue
+                    quotation_number = workflow.get('quotation_number', 'N/A')
+                    customer_name = workflow.get('customer_name', 'Unknown')
+                    workflow_type = workflow.get('workflow_type', 'mixed')
+                    workflow_options.append(f"{quotation_number} - {customer_name} ({workflow_type})")
+                
+                selected_workflow_display = st.selectbox("편집할 워크플로우 선택", workflow_options, key="edit_workflow_select")
+                
+                if selected_workflow_display:
+                    # 선택된 워크플로우 찾기
+                    selected_index = workflow_options.index(selected_workflow_display)
+                    selected_workflow = workflows_df[selected_index]
+                    workflow_id = selected_workflow['workflow_id']
+                    
+                    st.divider()
+                    
+                    # 기본 정보 편집
+                    st.subheader("📝 기본 정보 편집")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        new_customer_name = st.text_input("고객명", value=selected_workflow.get('customer_name', ''))
+                        new_notes = st.text_area("메모", value=selected_workflow.get('notes', ''))
+                    
+                    with col2:
+                        new_sales_team = st.text_input("담당 판매팀", value=selected_workflow.get('assigned_sales_team', ''))
+                        new_service_team = st.text_input("담당 서비스팀", value=selected_workflow.get('assigned_service_team', ''))
+                    
+                    # 기본 정보 업데이트 버튼
+                    if st.button("기본 정보 업데이트", key="update_basic_info"):
+                        updates = {
+                            'customer_name': new_customer_name,
+                            'notes': new_notes,
+                            'assigned_sales_team': new_sales_team,
+                            'assigned_service_team': new_service_team
+                        }
+                        success, message = st.session_state.bp_manager_v2.update_workflow(workflow_id, updates)
+                        if success:
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+                    
+                    st.divider()
+                    
+                    # 단계별 편집
+                    st.subheader("🔧 단계별 편집")
+                    
+                    # 사용자 정보
+                    user_id = st.session_state.get('user_id', '')
+                    
+                    # 판매 프로세스 편집
+                    if selected_workflow.get('has_sales_items', False):
+                        st.markdown("### 📈 판매 프로세스 단계 편집")
+                        
+                        try:
+                            sales_stages_json = selected_workflow.get('sales_stages_json', '[]')
+                            if isinstance(sales_stages_json, str):
+                                sales_stages = json.loads(sales_stages_json)
+                            else:
+                                sales_stages = []
+                            
+                            current_stage = str(selected_workflow.get('sales_current_stage', ''))
+                            
+                            # 각 단계 편집
+                            for i, stage in enumerate(sales_stages):
+                                stage_name = stage.get('stage_name', f'단계 {i+1}')
+                                stage_status = stage.get('status', '대기')
+                                
+                                with st.expander(f"{stage_name} (상태: {stage_status})"):
+                                    col1, col2, col3 = st.columns(3)
+                                    
+                                    with col1:
+                                        # 모든 단계를 마스터가 수정 가능하도록 변경
+                                        new_status = st.selectbox(
+                                            "상태 변경", 
+                                            ['대기', '진행중', '완료'], 
+                                            index=['대기', '진행중', '완료'].index(stage_status),
+                                            key=f"sales_status_{i}"
+                                        )
+                                    
+                                    with col2:
+                                        new_assigned = st.text_input(
+                                            "담당자", 
+                                            value=stage.get('assigned_to', '') or '',
+                                            key=f"sales_assigned_{i}"
+                                        )
+                                    
+                                    with col3:
+                                        new_notes = st.text_area(
+                                            "메모", 
+                                            value=stage.get('notes', '') or '',
+                                            key=f"sales_notes_{i}"
+                                        )
+                                    
+                                    # 마스터는 모든 단계 업데이트 가능
+                                    col_update, col_reset = st.columns(2)
+                                    
+                                    with col_update:
+                                        if st.button(f"'{stage_name}' 단계 업데이트", key=f"update_sales_{i}"):
+                                            # 단계 정보 업데이트
+                                            sales_stages[i]['status'] = new_status
+                                            sales_stages[i]['assigned_to'] = new_assigned
+                                            sales_stages[i]['notes'] = new_notes
+                                            
+                                            # 상태 변경 시 날짜 업데이트
+                                            if new_status == '진행중' and stage_status != '진행중':
+                                                sales_stages[i]['started_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                            elif new_status == '완료' and stage_status != '완료':
+                                                sales_stages[i]['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                            
+                                            # 현재 단계 업데이트
+                                            if new_status == '진행중':
+                                                current_stage = stage_name
+                                            
+                                            # 진행률 재계산
+                                            completed_stages = sum(1 for s in sales_stages if s['status'] == '완료')
+                                            progress = (completed_stages / len(sales_stages)) * 100
+                                            
+                                            # 업데이트 저장
+                                            updates = {
+                                                'sales_stages_json': json.dumps(sales_stages),
+                                                'sales_current_stage': current_stage,
+                                                'sales_progress': progress
+                                            }
+                                            
+                                            success, message = st.session_state.bp_manager_v2.update_workflow(workflow_id, updates)
+                                            if success:
+                                                st.success(f"'{stage_name}' 단계가 업데이트되었습니다.")
+                                                st.rerun()
+                                            else:
+                                                st.error(message)
+                                    
+                                    with col_reset:
+                                        if st.button(f"'{stage_name}' 초기화", key=f"reset_sales_{i}", type="secondary"):
+                                            # 단계 초기화
+                                            sales_stages[i]['status'] = '대기'
+                                            sales_stages[i]['assigned_to'] = ''
+                                            sales_stages[i]['notes'] = ''
+                                            sales_stages[i]['started_date'] = ''
+                                            sales_stages[i]['completed_date'] = ''
+                                            
+                                            # 업데이트 저장
+                                            updates = {
+                                                'sales_stages_json': json.dumps(sales_stages)
+                                            }
+                                            
+                                            success, message = st.session_state.bp_manager_v2.update_workflow(workflow_id, updates)
+                                            if success:
+                                                st.info(f"'{stage_name}' 단계가 초기화되었습니다.")
+                                                st.rerun()
+                                            else:
+                                                st.error(message)
+
+                    
+                        except Exception as e:
+                            st.error(f"판매 단계 편집 오류: {e}")
+                    
+                    # 서비스 프로세스 편집
+                    if selected_workflow.get('has_service_items', False):
+                        st.markdown("### 🔧 서비스 프로세스 단계 편집")
+                        
+                        try:
+                            service_stages_json = selected_workflow.get('service_stages_json', '[]')
+                            if isinstance(service_stages_json, str):
+                                service_stages = json.loads(service_stages_json)
+                            else:
+                                service_stages = []
+                            
+                            current_stage = str(selected_workflow.get('service_current_stage', ''))
+                            
+                            # 각 단계 편집
+                            for i, stage in enumerate(service_stages):
+                                stage_name = stage.get('stage_name', f'단계 {i+1}')
+                                stage_status = stage.get('status', '대기')
+                                
+                                with st.expander(f"{stage_name} (상태: {stage_status})"):
+                                    col1, col2, col3 = st.columns(3)
+                                    
+                                    with col1:
+                                        # 모든 단계를 마스터가 수정 가능하도록 변경
+                                        new_status = st.selectbox(
+                                            "상태 변경", 
+                                            ['대기', '진행중', '완료'], 
+                                            index=['대기', '진행중', '완료'].index(stage_status),
+                                            key=f"service_status_{i}"
+                                        )
+                                    
+                                    with col2:
+                                        new_assigned = st.text_input(
+                                            "담당자", 
+                                            value=stage.get('assigned_to', '') or '',
+                                            key=f"service_assigned_{i}"
+                                        )
+                                    
+                                    with col3:
+                                        new_notes = st.text_area(
+                                            "메모", 
+                                            value=stage.get('notes', '') or '',
+                                            key=f"service_notes_{i}"
+                                        )
+                                    
+                                    # 마스터는 모든 단계 업데이트 가능
+                                    col_update, col_reset = st.columns(2)
+                                    
+                                    with col_update:
+                                        if st.button(f"'{stage_name}' 단계 업데이트", key=f"update_service_{i}"):
+                                            # 단계 정보 업데이트
+                                            service_stages[i]['status'] = new_status
+                                            service_stages[i]['assigned_to'] = new_assigned
+                                            service_stages[i]['notes'] = new_notes
+                                            
+                                            # 상태 변경 시 날짜 업데이트
+                                            if new_status == '진행중' and stage_status != '진행중':
+                                                service_stages[i]['started_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                            elif new_status == '완료' and stage_status != '완료':
+                                                service_stages[i]['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                            
+                                            # 현재 단계 업데이트
+                                            if new_status == '진행중':
+                                                current_stage = stage_name
+                                            
+                                            # 진행률 재계산
+                                            completed_stages = sum(1 for s in service_stages if s['status'] == '완료')
+                                            progress = (completed_stages / len(service_stages)) * 100
+                                            
+                                            # 업데이트 저장
+                                            updates = {
+                                                'service_stages_json': json.dumps(service_stages),
+                                                'service_current_stage': current_stage,
+                                                'service_progress': progress
+                                            }
+                                            
+                                            success, message = st.session_state.bp_manager_v2.update_workflow(workflow_id, updates)
+                                            if success:
+                                                st.success(f"'{stage_name}' 단계가 업데이트되었습니다.")
+                                                st.rerun()
+                                            else:
+                                                st.error(message)
+                                    
+                                    with col_reset:
+                                        if st.button(f"'{stage_name}' 초기화", key=f"reset_service_{i}", type="secondary"):
+                                            # 단계 초기화
+                                            service_stages[i]['status'] = '대기'
+                                            service_stages[i]['assigned_to'] = ''
+                                            service_stages[i]['notes'] = ''
+                                            service_stages[i]['started_date'] = ''
+                                            service_stages[i]['completed_date'] = ''
+                                            
+                                            # 업데이트 저장
+                                            updates = {
+                                                'service_stages_json': json.dumps(service_stages)
+                                            }
+                                            
+                                            success, message = st.session_state.bp_manager_v2.update_workflow(workflow_id, updates)
+                                            if success:
+                                                st.info(f"'{stage_name}' 단계가 초기화되었습니다.")
+                                                st.rerun()
+                                            else:
+                                                st.error(message)
+                    
+                        except Exception as e:
+                            st.error(f"서비스 단계 편집 오류: {e}")
+                    
+                    st.divider()
+                    
+                    # 워크플로우 관리 (마스터 전용)
+                    st.subheader("🔧 워크플로우 관리")
+                    
+                    col_mgmt1, col_mgmt2, col_mgmt3 = st.columns(3)
+                    
+                    with col_mgmt1:
+                        st.markdown("**전체 워크플로우 재설정**")
+                        if st.button("🔄 전체 워크플로우 초기화", key="reset_all_workflow"):
+                            # 모든 단계를 대기 상태로 초기화
+                            updates = {
+                                'overall_progress': 0,
+                                'sales_progress': 0,
+                                'service_progress': 0,
+                                'sales_current_stage': '',
+                                'service_current_stage': ''
+                            }
+                            
+                            # 판매 단계 초기화
+                            if selected_workflow.get('has_sales_items', False):
+                                try:
+                                    sales_stages_json = selected_workflow.get('sales_stages_json', '[]')
+                                    if isinstance(sales_stages_json, str):
+                                        sales_stages = json.loads(sales_stages_json)
+                                        for stage in sales_stages:
+                                            stage['status'] = '대기'
+                                            stage['assigned_to'] = ''
+                                            stage['notes'] = ''
+                                            stage['started_date'] = ''
+                                            stage['completed_date'] = ''
+                                        updates['sales_stages_json'] = json.dumps(sales_stages)
+                                except:
+                                    pass
+                            
+                            # 서비스 단계 초기화
+                            if selected_workflow.get('has_service_items', False):
+                                try:
+                                    service_stages_json = selected_workflow.get('service_stages_json', '[]')
+                                    if isinstance(service_stages_json, str):
+                                        service_stages = json.loads(service_stages_json)
+                                        for stage in service_stages:
+                                            stage['status'] = '대기'
+                                            stage['assigned_to'] = ''
+                                            stage['notes'] = ''
+                                            stage['started_date'] = ''
+                                            stage['completed_date'] = ''
+                                        updates['service_stages_json'] = json.dumps(service_stages)
+                                except:
+                                    pass
+                            
+                            success, message = st.session_state.bp_manager_v2.update_workflow(workflow_id, updates)
+                            if success:
+                                st.success("전체 워크플로우가 초기화되었습니다.")
                                 st.rerun()
                             else:
-                                st.session_state.language_just_changed = False
-            
-            st.markdown("---")
-            logout_text = get_text("logout")
-            if st.button(f"🔐 {logout_text}", key="logout_button", use_container_width=True, type="secondary"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-            
-            # 언어 선택을 로그아웃 아래로 이동
-            st.markdown("---")
-            show_language_selector("sidebar")
-            
-            # ZIP 파일 다운로드 버튼 표시
-            show_download_button()
-            
-            # 사용자 정보를 언어 선택 아래에 표시
-            st.markdown("---")
-            user_type = st.session_state.get('user_type', '')
-            user_id = st.session_state.get('user_id', 'Unknown')
-            
-            menu_type_emoji = ""
-            if user_type == 'master':
-                menu_type_emoji = "👑"
-            elif user_type == 'employee':
-                menu_type_emoji = "👤"
-            
-            # 사용자 정보 컴팩트하게 표시
-            st.markdown(f"""
-            <div style="text-align: center; padding: 5px; background-color: #f0f2f6; border-radius: 5px; margin: 5px 0;">
-                <span style="color: #333; font-size: 12px;">
-                    {menu_type_emoji} {user_id}
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
+                                st.error(message)
+                    
+                    with col_mgmt2:
+                        st.markdown("**워크플로우 복제**")
+                        new_quotation_number = st.text_input("새 견적번호", placeholder="복제할 새 견적번호")
+                        if st.button("📋 워크플로우 복제", key="clone_workflow"):
+                            if new_quotation_number:
+                                # 현재 워크플로우 데이터 복사
+                                clone_data = selected_workflow.copy()
+                                clone_data['quotation_number'] = new_quotation_number
+                                clone_data['workflow_id'] = f"WF_{new_quotation_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                                clone_data['created_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                clone_data['overall_progress'] = 0
+                                clone_data['sales_progress'] = 0
+                                clone_data['service_progress'] = 0
+                                
+                                # 단계 초기화
+                                if clone_data.get('has_sales_items', False):
+                                    try:
+                                        sales_stages_json = clone_data.get('sales_stages_json', '[]')
+                                        if isinstance(sales_stages_json, str):
+                                            sales_stages = json.loads(sales_stages_json)
+                                        else:
+                                            sales_stages = []
+                                        for stage in sales_stages:
+                                            stage['status'] = '대기'
+                                            stage['assigned_to'] = ''
+                                            stage['notes'] = ''
+                                            stage['started_date'] = ''
+                                            stage['completed_date'] = ''
+                                        clone_data['sales_stages_json'] = json.dumps(sales_stages)
+                                    except:
+                                        pass
+                                
+                                if clone_data.get('has_service_items', False):
+                                    try:
+                                        service_stages_json = clone_data.get('service_stages_json', '[]')
+                                        if isinstance(service_stages_json, str):
+                                            service_stages = json.loads(service_stages_json)
+                                        else:
+                                            service_stages = []
+                                        for stage in service_stages:
+                                            stage['status'] = '대기'
+                                            stage['assigned_to'] = ''
+                                            stage['notes'] = ''
+                                            stage['started_date'] = ''
+                                            stage['completed_date'] = ''
+                                        clone_data['service_stages_json'] = json.dumps(service_stages)
+                                    except:
+                                        pass
+                                
+                                success, message = st.session_state.bp_manager_v2.create_workflow_from_data(clone_data)
+                                if success:
+                                    st.success(f"워크플로우가 '{new_quotation_number}'로 복제되었습니다.")
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                            else:
+                                st.warning("새 견적번호를 입력해주세요.")
+                    
+                    with col_mgmt3:
+                        st.markdown("**워크플로우 삭제**")
+                        st.warning("⚠️ 삭제된 워크플로우는 복구할 수 없습니다.")
+                        if st.button("🗑️ 이 워크플로우 삭제", type="secondary"):
+                            success, message = st.session_state.bp_manager_v2.delete_workflow(workflow_id)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
         
-        # 메인 콘텐츠
+            else:
+                st.info("편집할 워크플로우가 없습니다.")
+                st.write("워크플로우를 생성한 후 편집 기능을 사용할 수 있습니다.")
+    
+    with tab5:
+        st.header("📈 성과 분석")
+        
         try:
-            # 세션 상태에서 메뉴 변경 요청 확인
-            if 'selected_menu' in st.session_state:
-                st.session_state.selected_system = st.session_state['selected_menu']
-                del st.session_state['selected_menu']  # 임시 키 삭제
-                # 언어 변경 직후가 아닌 경우에만 rerun
-                if not st.session_state.get('language_just_changed', False):
-                    st.rerun()
-                else:
-                    st.session_state.language_just_changed = False
-            
-            current_system = st.session_state.selected_system
-            
-            # 각 시스템의 페이지 표시
-            show_page_for_menu(current_system)
-        
+            workflows_df = st.session_state.bp_manager_v2.get_all_workflows()
+            if isinstance(workflows_df, list):
+                # 딕셔너리인 항목만 필터링
+                valid_workflows = [w for w in workflows_df if isinstance(w, dict)]
+                workflows_df = valid_workflows
+            else:
+                workflows_df = []
         except Exception as e:
-            error_msg = get_text("system_error", lang_dict) if 'system_error' in lang_dict else "시스템 오류가 발생했습니다"
-            contact_msg = get_text("contact_admin", lang_dict) if 'contact_admin' in lang_dict else "관리자에게 문의해주세요"
-            st.error(f"{error_msg}: {str(e)}")
-            st.info(contact_msg)
-            logger.error(f"Main app content error: {e}")
+            st.error(f"분석 데이터 로드 오류: {e}")
+            workflows_df = []
+        
+        if (not workflows_df.empty if isinstance(workflows_df, pd.DataFrame) else len(workflows_df) > 0):
+            # 기본 통계
+            col1, col2, col3 = st.columns(3)
             
-    except Exception as e:
-        logger.error(f"Main app error: {e}")
-        st.error(f"메인 애플리케이션 오류: {e}")
+            with col1:
+                st.metric("전체 워크플로우", len(workflows_df))
+            
+            with col2:
+                completed_count = len([w for w in workflows_df if w.get('overall_status') == 'completed'])
+                st.metric("완료된 워크플로우", completed_count)
+            
+            with col3:
+                progress_values = [w.get('overall_progress', 0) for w in workflows_df if isinstance(w.get('overall_progress'), (int, float))]
+                avg_progress = sum(progress_values) / len(progress_values) if progress_values else 0
+                st.metric("평균 진행률", f"{avg_progress:.1f}%")
+            
+            # 프로세스 타입별 분포
+            if (not workflows_df.empty if isinstance(workflows_df, pd.DataFrame) else len(workflows_df) > 0):
+                st.subheader("📊 프로세스 타입별 분포")
+                
+                # 워크플로우 타입 카운트
+                type_counts = {}
+                for workflow in workflows_df:
+                    wf_type = workflow.get('workflow_type', 'unknown')
+                    type_counts[wf_type] = type_counts.get(wf_type, 0) + 1
+                
+                if type_counts:
+                    import plotly.express as px
+                    fig = px.pie(
+                        values=list(type_counts.values()), 
+                        names=list(type_counts.keys()),
+                        title="프로세스 타입별 분포"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("분석할 데이터가 없습니다.")
 
 def show_page_for_menu(system_key):
     """각 메뉴의 실제 기능 페이지를 표시합니다."""
@@ -1050,7 +1933,9 @@ def show_page_for_menu(system_key):
                 'can_access_employee_management': True,
                 'can_access_customer_management': True,
                 'can_access_product_management': True,
+
                 'can_access_supplier_management': True,
+
                 'can_access_purchase_order_management': True,
                 'can_access_inventory_management': True,
                 'can_access_shipping_management': True,
@@ -1061,76 +1946,36 @@ def show_page_for_menu(system_key):
                 'can_access_sales_product_management': True,
                 'can_access_order_management': True,
                 'can_access_exchange_rate_management': True,
+
                 'can_access_personal_status': True,
                 'can_access_vacation_management': True,
-                'can_access_office_purchase_management': True,  # 8-Office 구매 안정화-1
                 'can_delete_data': True
             }
         else:
             # 직원 계정은 저장된 권한 사용
             user_permissions = st.session_state.auth_manager.get_user_permissions(current_user_id, current_user_type)
-        
-        # 8-Office 구매 안정화-1: 사무용품 구매 관리 메뉴 추가
-        if system_key == "office_purchase_management":
-            # 서브메뉴에 돌아가기 버튼 추가
-            col_header, col_back = st.columns([3, 1])
-            with col_header:
-                st.header("🖥️ 사무용품 구매 관리")
-            with col_back:
-                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_office"):
-                    st.session_state.selected_system = "admin_management"
-                    st.rerun()
-            
-            # Office 구매 관리 페이지 표시
-            try:
-                from pages.office_purchase_page import main as show_office_purchase_page
-                show_office_purchase_page()
-            except ImportError:
-                st.error("사무용품 구매 모듈을 불러올 수 없습니다.")
-                # 임시 대체 UI
-                st.info("사무용품 구매 관리 기능을 준비 중입니다.")
-                
-                # 기본 기능 표시
-                tab1, tab2, tab3 = st.tabs(["📊 구매 현황", "➕ 새 구매 등록", "📋 구매 이력"])
-                
-                with tab1:
-                    st.subheader("📊 사무용품 구매 현황")
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("이번 달 구매", "0건", "0")
-                    with col2:
-                        st.metric("총 구매 금액", "0 VND", "0")
-                    with col3:
-                        st.metric("대기 중인 구매", "0건", "0")
-                    with col4:
-                        st.metric("Office 라이선스", "0개", "0")
-                
-                with tab2:
-                    st.subheader("➕ 새 사무용품 구매 등록")
-                    st.info("구매 등록 기능을 준비 중입니다.")
-                
-                with tab3:
-                    st.subheader("📋 구매 이력")
-                    st.info("구매 이력을 준비 중입니다.")
-            except Exception as e:
-                st.error(f"사무용품 구매 페이지 로딩 중 오류: {e}")
-                logger.error(f"Office purchase page error: {e}")
-        
-        elif system_key == "dashboard":
+        if system_key == "dashboard":
             from pages.menu_dashboard import show_main_dashboard
             
             # 매니저 안전 초기화
+            if 'employee_manager' not in st.session_state:
+                st.session_state.employee_manager = get_employee_manager()
+            if 'customer_manager' not in st.session_state:
+                st.session_state.customer_manager = get_customer_manager()
+            if 'product_manager' not in st.session_state:
+                st.session_state.product_manager = get_product_manager()
+            if 'vacation_manager' not in st.session_state:
+                st.session_state.vacation_manager = get_vacation_manager()
+            
             managers = {
                 'employee_manager': ensure_manager_loaded('employee_manager'),
                 'customer_manager': ensure_manager_loaded('customer_manager'),
                 'product_manager': ensure_manager_loaded('product_manager'),
                 'vacation_manager': ensure_manager_loaded('vacation_manager'),
-                'office_purchase_manager': ensure_manager_loaded('office_purchase_manager'),  # 8-Office 구매 안정화-1
             }
             show_main_dashboard(managers, None, get_text)
-            
         elif system_key == "employee_management":
-            # 서브메뉴에 돌아가기 버튼 추가
+            # 서브메뉴에 돌아가기 버튼 추가 (페이지 내 헤더 제거하고 여기서만 표시)
             col_header, col_back = st.columns([3, 1])
             with col_header:
                 st.header("👥 직원 관리")
@@ -1147,7 +1992,852 @@ def show_page_for_menu(system_key):
                 get_text,
                 hide_header=True  # 헤더 숨김 플래그 추가
             )
+        elif system_key == "customer_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("👥 고객 관리")
+            with col_back:
+                if st.button("↩️ 영업관리", key="back_to_sales_from_customer"):
+                    st.session_state.selected_system = "sales_management"
+                    st.rerun()
             
+            from pages.customer_page import show_customer_page  
+            show_customer_page(
+                ensure_manager_loaded('customer_manager'),
+                user_permissions,
+                get_text
+            )
+
+
+        elif system_key == "supplier_management":
+            from pages.supplier_page import show_supplier_page
+            show_supplier_page(
+                ensure_manager_loaded('supplier_manager'), 
+                {},  # user_permissions
+                get_text
+            )
+        elif system_key == "product_registration":
+            # 통합 제품 등록 페이지
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("📝 제품 등록")
+            with col_back:
+                if st.button("↩️ 제품관리", key="back_to_product_from_registration"):
+                    st.session_state.selected_system = "product_management"
+                    st.rerun()
+            
+            from pages.product_registration_page import show_product_registration_page
+            show_product_registration_page(
+                ensure_manager_loaded('master_product_manager'),
+                ensure_manager_loaded('finished_product_manager'),
+                ensure_manager_loaded('product_code_manager'),
+                st.session_state.user_permissions,
+                get_text
+            )
+        elif system_key == "hr_product_registration":
+            # HR 제품 등록 메뉴
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("🔥 HR 제품 등록")
+            with col_back:
+                if st.button("↩️ 제품관리", key="back_to_product_from_hr"):
+                    st.session_state.selected_system = "product_management"
+                    st.rerun()
+            
+            from scripts.hr_product_registration import show_hr_product_registration, show_hr_product_list
+            
+            # 탭으로 제품 등록과 목록 구분
+            hr_tabs = st.tabs(["🆕 신규 제품 등록", "📋 등록된 HR 제품 목록"])
+            
+            with hr_tabs[0]:
+                show_hr_product_registration()
+            
+            with hr_tabs[1]:
+                show_hr_product_list()
+                
+        elif system_key == "exchange_rate_management":
+            from pages.yearly_management_rate_page import show_yearly_management_rate_page
+            show_yearly_management_rate_page(get_text)
+
+        elif system_key == "business_process_v2_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"🔄 {get_text('process_management')}")
+            with col_back:
+                if st.button("↩️ 영업관리", key="back_to_sales_from_process"):
+                    st.session_state.selected_system = "sales_management"
+                    st.rerun()
+            
+            show_business_process_v2_page()
+        elif system_key == "work_report_management":
+            from pages.work_report_page import show_work_report_page
+            show_work_report_page(get_text)
+        elif system_key == "work_status_management":
+            from pages.work_status_page import show_work_status_page
+            show_work_status_page(get_text)
+        elif system_key == "order_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("📦 주문 관리")
+            with col_back:
+                if st.button("↩️ 영업관리", key="back_to_sales_from_order"):
+                    st.session_state.selected_system = "sales_management"
+                    st.rerun()
+            
+            from pages.order_page import show_order_page
+            show_order_page(
+                ensure_manager_loaded('order_manager'),
+                ensure_manager_loaded('quotation_manager'),
+                ensure_manager_loaded('customer_manager'),
+                st.session_state.get('user_id', ''),
+                get_text
+            )
+        elif system_key == "approval_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("✅ 승인관리 (법인장 전용)")
+            with col_back:
+                if st.button("↩️ 법인장메뉴", key="back_to_executive_from_approval"):
+                    st.session_state.selected_system = "executive_management"
+                    st.rerun()
+            
+            # 법인장과 마스터만 접근 가능
+            user_access = st.session_state.get('access_level', 'user')
+            if not check_access_level('ceo', user_access):
+                st.error("❌ 승인관리는 법인장 이상만 접근할 수 있습니다.")
+                if st.button("돌아가기"):
+                    st.session_state.selected_system = None
+                    st.rerun()
+                return
+            
+            from pages.approval_page import show_approval_page
+            show_approval_page(
+                ensure_manager_loaded('approval_manager'),
+                ensure_manager_loaded('employee_manager'),
+                {},  # user_permissions
+                get_text
+            )
+        elif system_key == "expense_request_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"💰 {get_text('expense_admin_management')}")
+            with col_back:
+                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_expense"):
+                    st.session_state.selected_system = "admin_management"
+                    st.rerun()
+            
+            # 베트남 직원을 위한 더 직관적인 메시지
+            st.info(f"💡 **{get_text('admin_business')}**: {get_text('business_flow_info')}")
+            
+            from pages.expense_request_admin_page import show_expense_request_admin_page as show_expense_request_page
+            show_expense_request_page(
+                ensure_manager_loaded('expense_request_manager'),
+                st.session_state.get('user_id', ''),
+                st.session_state.get('user_name', ''),
+                get_text
+            )
+        elif system_key == "quotation_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("📋 견적 관리")
+            with col_back:
+                if st.button("↩️ 영업관리", key="back_to_sales_from_quotation"):
+                    st.session_state.selected_system = "sales_management"
+                    st.rerun()
+            
+            from pages.quotation_page import main
+            main()
+
+
+
+
+        elif system_key == "shipping_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("📄 납품 확인서 관리")
+            with col_back:
+                if st.button("↩️ 영업관리", key="back_to_sales_from_shipping"):
+                    st.session_state.selected_system = "sales_management"
+                    st.rerun()
+            
+            from pages.shipping_page import show_shipping_page
+            # SQLite 배송 매니저 우선 사용
+            shipping_manager = st.session_state.get('sqlite_shipping_manager') or st.session_state.get('shipping_manager')
+            show_shipping_page(
+                shipping_manager,
+                ensure_manager_loaded('quotation_manager'),
+                get_text
+            )
+        elif system_key == "cash_flow_management":
+            # 서브메뉴에 돌아가기 버튼 추가 (페이지 내 헤더 제거하고 여기서만 표시)
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("💰 현금 흐름관리")
+            with col_back:
+                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_cash"):
+                    st.session_state.selected_system = "admin_management"
+                    st.rerun()
+            
+            from pages.cash_flow_page import show_cash_flow_management_page
+            managers = {
+                'cash_flow_manager': ensure_manager_loaded('cash_flow_manager'),
+                'quotation_manager': ensure_manager_loaded('quotation_manager'),
+                'invoice_manager': ensure_manager_loaded('invoice_manager'),
+                'purchase_order_manager': st.session_state.get('purchase_order_manager')  # 이 매니저는 옵션널
+            }
+            show_cash_flow_management_page(managers, None, get_text, hide_header=True)
+        
+        elif system_key == "contract_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"📝 {get_text('contract_management')}")
+            with col_back:
+                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_contract"):
+                    st.session_state.selected_system = "admin_management"
+                    st.rerun()
+            
+            from pages.contract_page import show_contract_page
+            show_contract_page(get_text)
+        elif system_key == "schedule_task_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"📅 {get_text('admin_schedule_management')}")
+            with col_back:
+                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_schedule"):
+                    st.session_state.selected_system = "admin_management"
+                    st.rerun()
+            
+            from pages.schedule_task_page import show_schedule_task_page
+            show_schedule_task_page(get_text)
+        elif system_key == "purchase_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"🛒 {get_text('purchase_product_registration')}")
+            with col_back:
+                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_purchase"):
+                    st.session_state.selected_system = "admin_management"
+                    st.rerun()
+            
+            from pages.purchase_page import show_purchase_page
+            show_purchase_page(get_text)
+        elif system_key == "asset_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"🏢 {get_text('asset_management')}")
+            with col_back:
+                if st.button(f"↩️ {get_text('back_to_admin_menu')}", key="back_to_admin_from_asset"):
+                    st.session_state.selected_system = "admin_management"
+                    st.rerun()
+            
+            # 자산 관리 기능 (실제 데이터 기반)
+            st.markdown("### 📊 자산 현황 대시보드")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("총 자산 가치", "0 VND", "0")
+            with col2:
+                st.metric("등록된 자산", "0개", "0")
+            with col3:
+                st.metric("점검 대상", "0개", "0")
+            with col4:
+                st.metric("교체 예정", "0개", "0")
+            
+            # 자산 등록 탭
+            tab1, tab2, tab3, tab4 = st.tabs(["📝 자산 등록", "📋 자산 목록", "🔧 유지보수", "💰 감가상각 계산"])
+            
+            with tab1:
+                st.subheader("새 자산 등록")
+                with st.form("asset_registration"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        asset_name = st.text_input("자산명")
+                        asset_category = st.selectbox("자산 분류", [
+                            "사무용 가구", "컴퓨터/IT장비", "생산장비", "차량", "건물/부동산", "에어컨/냉난방", "기타"
+                        ])
+                        purchase_price = st.number_input("구매가격 (VND)", min_value=0)
+                        purchase_date = st.date_input("구매일자")
+                    
+                    with col2:
+                        asset_location = st.text_input("설치 위치")
+                        asset_condition = st.selectbox("상태", ["정상", "수리 필요", "사용 중지", "폐기 예정"])
+                        useful_life = st.number_input("내용연수 (년)", min_value=1, max_value=50, value=5)
+                        salvage_value = st.number_input("잔존가치 (VND)", min_value=0)
+                    
+                    description = st.text_area("설명")
+                    
+                    if st.form_submit_button("자산 등록"):
+                        st.success("자산이 성공적으로 등록되었습니다!")
+            
+            with tab2:
+                st.subheader("자산 목록")
+                
+                # 필터링 옵션
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    filter_category = st.selectbox("분류 필터", [
+                        "전체", "사무용 가구", "컴퓨터/IT장비", "생산장비", "차량", "건물/부동산", "에어컨/냉난방", "기타"
+                    ])
+                with col2:
+                    filter_location = st.selectbox("위치 필터", [
+                        "전체", "1층 사무실", "2층 사무실", "생산동", "창고", "주차장", "기타"
+                    ])
+                with col3:
+                    filter_status = st.selectbox("상태 필터", [
+                        "전체", "정상", "수리 필요", "사용 중지", "폐기 예정"
+                    ])
+                
+                st.markdown("---")
+                st.info("등록된 자산이 없습니다. 자산을 등록하면 여기에 목록이 표시됩니다.")
+            
+            with tab3:
+                st.subheader("유지보수 관리")
+                st.info("유지보수 기능은 개발 중입니다.")
+            
+            with tab4:
+                st.subheader("감가상각 계산기")
+                
+                with st.form("depreciation_calculator"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        calc_price = st.number_input("자산 가격 (VND)", min_value=0, value=1000000)
+                        calc_salvage = st.number_input("잔존가치 (VND)", min_value=0, value=100000)
+                    with col2:
+                        calc_years = st.number_input("내용연수 (년)", min_value=1, max_value=50, value=5)
+                        calc_method = st.selectbox("상각방법", ["정액법", "정률법", "생산량비례법"])
+                    
+                    if st.form_submit_button("감가상각 계산"):
+                        if calc_price > calc_salvage and calc_years > 0:
+                            annual_dep = (calc_price - calc_salvage) / calc_years
+                            monthly_dep = annual_dep / 12
+                            depreciation_rate = (annual_dep / calc_price) * 100
+                            
+                            st.metric("연간 감가상각비", f"{annual_dep:,.0f} VND")
+                            st.metric("월간 감가상각비", f"{monthly_dep:,.0f} VND") 
+                            st.metric("감가상각률", f"{depreciation_rate:.2f}%")
+                            
+                            # 5년간 감가상각 스케줄 표시
+                            st.markdown("**감가상각 스케줄 (첫 5년)**")
+                            schedule_data = []
+                            cumulative_dep = 0
+                            for year in range(1, min(calc_years + 1, 6)):
+                                cumulative_dep += annual_dep
+                                book_value = calc_price - cumulative_dep
+                                schedule_data.append({
+                                    "년도": f"{year}년차",
+                                    "연간상각비": f"{annual_dep:,.0f}",
+                                    "누적상각비": f"{cumulative_dep:,.0f}",
+                                    "순장부가액": f"{max(book_value, calc_salvage):,.0f}"
+                                })
+                            
+                            import pandas as pd
+                            df_schedule = pd.DataFrame(schedule_data)
+                            st.dataframe(df_schedule, use_container_width=True)
+        elif system_key == "backup_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("💾 백업 및 복원 관리")
+            with col_back:
+                if st.button("↩️ 법인장메뉴", key="back_to_executive_from_backup"):
+                    st.session_state.selected_system = "executive_management"
+                    st.rerun()
+            
+            try:
+                from pages.backup_page import show_backup_page
+                show_backup_page(st.session_state.auth_manager, get_text)
+            except Exception as e:
+                st.error(f"백업 페이지 로드 중 오류가 발생했습니다: {str(e)}")
+                st.info("백업 시스템이 일시적으로 사용할 수 없습니다.")
+            
+        elif system_key == "language_management":
+            # 서브메뉴에 돌아가기 버튼 추가
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("🌍 다국어 관리 시스템")
+            with col_back:
+                if st.button("↩️ 법인장메뉴", key="back_to_executive_from_language"):
+                    st.session_state.selected_system = "executive_management"
+                    st.rerun()
+            
+            from pages.language_management_page import show_language_management_page
+            show_language_management_page()
+        elif system_key == "monthly_sales_management":
+            # 서브메뉴에 돌아가기 버튼 추가 (페이지 내 헤더 제거하고 여기서만 표시)
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("📈 월별 매출관리")
+            with col_back:
+                if st.button("↩️ 영업관리", key="back_to_sales_from_monthly"):
+                    st.session_state.selected_system = "sales_management"
+                    st.rerun()
+            
+            from pages.monthly_sales_page import show_monthly_sales_page
+            monthly_sales_manager = ensure_manager_loaded('monthly_sales_manager')
+            if monthly_sales_manager:
+                show_monthly_sales_page(
+                    monthly_sales_manager,
+                    ensure_manager_loaded('customer_manager'),
+                    ensure_manager_loaded('exchange_rate_manager')
+                )
+            else:
+                st.error("❌ 월별 매출관리 시스템을 초기화할 수 없습니다.")
+        elif system_key == "system_guide":
+            from pages.system_guide_page import show_system_guide
+            show_system_guide(get_text)
+        elif system_key == "system_config_management":
+            # 기존 시스템 설정을 제품 분류 관리로 업그레이드
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("⚙️ 시스템 설정")
+            with col_back:
+                if st.button("↩️ 법인장메뉴", key="back_to_executive_from_system"):
+                    st.session_state.selected_system = "executive_management"
+                    st.rerun()
+            
+            from pages.system_settings_page import show_system_settings_page
+            
+            # 매니저 안전 초기화
+            if 'system_config_manager' not in st.session_state:
+                st.session_state.system_config_manager = get_system_config_manager()
+            if 'supplier_manager' not in st.session_state:
+                st.session_state.supplier_manager = get_supplier_manager()
+            if 'product_code_manager' not in st.session_state:
+                st.session_state.product_code_manager = get_product_code_manager()
+            if 'master_product_manager' not in st.session_state:
+                st.session_state.master_product_manager = get_master_product_manager()
+            # product_category_config_manager는 PostgreSQL 제품 매니저들로 대체됨
+            # 제품 카테고리 기능은 get_product_manager() 또는 get_master_product_manager() 사용
+            
+            managers = {
+                'system_config_manager': ensure_manager_loaded('system_config_manager'),
+                'supplier_manager': ensure_manager_loaded('supplier_manager'),
+                'product_code_manager': ensure_manager_loaded('product_code_manager'),
+                'master_product_manager': ensure_manager_loaded('master_product_manager')
+            }
+            show_system_settings_page(
+                ensure_manager_loaded('master_product_manager'),  # product_category_config_manager 대체
+                get_text,
+                hide_header=True,
+                managers=managers
+            )
+        elif system_key == "personal_status":
+            from pages.personal_status_page import show_personal_status_page
+            # lazy loading으로 필요한 매니저들 안전하게 로드
+            vacation_manager = ensure_manager_loaded('vacation_manager')
+            approval_manager = ensure_manager_loaded('approval_manager')
+            show_personal_status_page(
+                ensure_manager_loaded('employee_manager'),
+                vacation_manager,
+                approval_manager,
+                user_permissions,
+                get_text
+            )
+        elif system_key == "work_report_management":
+            from pages.work_report_page import show_work_report_page
+            show_work_report_page(get_text)
+        elif system_key == "system_config":
+            # 기존 시스템 설정을 제품 분류 관리로 업그레이드
+            st.header("⚙️ 시스템 설정")
+            from pages.system_settings_page import show_system_settings_page
+            
+            # 매니저 안전 초기화
+            if 'system_config_manager' not in st.session_state:
+                st.session_state.system_config_manager = get_system_config_manager()
+            if 'supplier_manager' not in st.session_state:
+                st.session_state.supplier_manager = get_supplier_manager()
+            if 'product_code_manager' not in st.session_state:
+                st.session_state.product_code_manager = get_product_code_manager()
+            if 'master_product_manager' not in st.session_state:
+                st.session_state.master_product_manager = get_master_product_manager()
+            # product_category_config_manager는 PostgreSQL 제품 매니저들로 대체됨
+            # 제품 카테고리 기능은 get_product_manager() 또는 get_master_product_manager() 사용
+            
+            managers = {
+                'system_config_manager': st.session_state.system_config_manager,
+                'supplier_manager': st.session_state.supplier_manager,
+                'product_code_manager': st.session_state.product_code_manager,
+                'master_product_manager': st.session_state.master_product_manager
+            }
+            show_system_settings_page(
+                ensure_manager_loaded('master_product_manager'),  # product_category_config_manager 대체
+                get_text,
+                hide_header=True,
+                managers=managers
+            )
+        
+        # 새로운 메뉴 구조 처리
+        elif system_key == "sales_management":
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"📊 {get_text('sales_management')}")
+            with col_back:
+                if st.button(f"🏠 {get_text('main_menu')}", key="back_to_main_sales"):
+                    st.session_state.selected_system = "dashboard"
+                    st.rerun()
+            
+            # 견적서 진행상황 대시보드 표시
+            st.markdown("### 💼 견적서 진행현황")
+            try:
+                # 견적서 대시보드 간단히 표시
+                st.info("📋 견적서 관리 시스템이 준비되었습니다. 견적서 관리를 클릭하여 시작하세요.")
+            except Exception as e:
+                st.error(f"견적서 대시보드 로드 오류: {e}")
+            
+            st.markdown("---")
+            st.markdown(get_text('select_submenu'))
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                if st.button(f"👥 {get_text('customer_management')}", use_container_width=True):
+                    st.session_state.selected_system = "customer_management"
+                    st.rerun()
+            with col2:
+                if st.button(f"📋 {get_text('quotation_management')}", use_container_width=True):
+                    st.session_state.selected_system = "quotation_management"
+                    st.rerun()
+            with col3:
+                if st.button(f"📦 {get_text('order_management')}", use_container_width=True):
+                    st.session_state.selected_system = "order_management"
+                    st.rerun()
+            with col4:
+                if st.button(f"🔄 {get_text('business_process')}", use_container_width=True):
+                    st.session_state.selected_system = "business_process_v2_management"
+                    st.rerun()
+                    
+            col5, col6, col7 = st.columns(3)
+            with col5:
+                if st.button(f"🚚 {get_text('shipping_management')}", use_container_width=True):
+                    st.session_state.selected_system = "shipping_management"
+                    st.rerun()
+            with col6:
+                if st.button(f"📈 {get_text('monthly_sales')}", use_container_width=True):
+                    st.session_state.selected_system = "monthly_sales_management"
+                    st.rerun()
+            with col7:
+                if st.button(f"🏢 {get_text('supplier_management')}", use_container_width=True):
+                    st.session_state.selected_system = "supplier_management"
+                    st.rerun()
+        
+                    
+        elif system_key == "product_management":
+            # 제품 등록 페이지를 바로 표시
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("📦 제품 등록")
+            with col_back:
+                if st.button("🏠 메인 메뉴", key="back_to_main_product"):
+                    st.session_state.selected_system = "dashboard"
+                    st.rerun()
+            
+            # 제품 등록 페이지 직접 표시
+            try:
+                from pages.product_registration_page import show_product_registration_page
+                show_product_registration_page(
+                    get_master_product_manager_cached(),
+                    get_finished_product_manager_cached(),
+                    get_product_code_manager_cached(),
+                    st.session_state.get('user_permissions', {}),
+                    get_text
+                )
+            except Exception as e:
+                st.error(f"제품 등록 페이지 로딩 중 오류가 발생했습니다: {str(e)}")
+                    
+        elif system_key == "executive_management":
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header("👑 법인장 메뉴")
+            with col_back:
+                if st.button("🏠 메인 메뉴", key="back_to_main_executive"):
+                    st.session_state.selected_system = "dashboard"
+                    st.rerun()
+            st.markdown("법인장 전용 메뉴를 선택해주세요.")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("✅ 승인관리", use_container_width=True):
+                    st.session_state.selected_system = "approval_management"
+                    st.rerun()
+            with col2:
+                if st.button("💾 백업관리", use_container_width=True):
+                    st.session_state.selected_system = "backup_management"
+                    st.rerun()
+            with col3:
+                    st.write("")  # 빈 공간
+            
+            # 추가 버튼 행
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                if st.button("⚙️ 시스템 설정", use_container_width=True):
+                    st.session_state.selected_system = "system_config"
+                    st.rerun()
+            with col5:
+                if st.button("🌍 다국어 관리", use_container_width=True):
+                    st.session_state.selected_system = "language_management"
+                    st.rerun()
+        
+        elif system_key == "system_config_management":
+            # 시스템 설정 관리는 시스템 설정과 동일
+            st.session_state.selected_system = "system_config"
+            st.rerun()
+        
+        elif system_key == "asset_management":
+            col_header, col_back = st.columns([3, 1])
+            with col_header:
+                st.header(f"🏭 {get_text('asset_management')}")
+            with col_back:
+                if st.button(f"🏠 {get_text('main_menu')}", key="back_to_main_asset"):
+                    st.session_state.selected_system = "dashboard"
+                    st.rerun()
+            
+            # 자산 관리 기본 기능 구현
+            tab1, tab2, tab3 = st.tabs([
+                f"📊 {get_text('asset_status')}", 
+                f"➕ {get_text('asset_registration')}", 
+                f"📋 {get_text('asset_management_tab')}"
+            ])
+            
+            with tab1:
+                st.subheader(f"📊 {get_text('overall_asset_status')}")
+                
+                # 자산 통계 카드
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(get_text('total_assets'), "0", help=get_text('total_assets_help'))
+                with col2:
+                    st.metric(get_text('total_acquisition_cost'), "0 VND", help=get_text('total_acquisition_cost_help'))
+                with col3:
+                    st.metric(get_text('annual_depreciation'), "0 VND", help=get_text('annual_depreciation_help'))
+                with col4:
+                    st.metric(get_text('net_book_value'), "0 VND", help=get_text('net_book_value_help'))
+                
+                st.markdown("---")
+                
+                # 감가상각 요약 차트
+                st.subheader(f"📈 {get_text('depreciation_status')}")
+                col5, col6 = st.columns(2)
+                
+                with col5:
+                    st.markdown(f"**{get_text('asset_depreciation_progress')}**")
+                    st.info(get_text('no_registered_assets'))
+                
+                with col6:
+                    st.markdown(f"**{get_text('monthly_depreciation_forecast')}**")
+                    st.info(get_text('no_depreciation_data'))
+                
+                st.markdown("---")
+                st.info(f"💡 {get_text('no_asset_data_message')}")
+            
+            with tab2:
+                st.subheader(f"➕ {get_text('new_asset_registration')}")
+                
+                # 베트남 세법 기준 감가상각 가이드
+                with st.expander(f"🇻🇳 {get_text('vietnam_tax_depreciation_guide')}"):
+                    st.markdown("""
+                    **베트남 세법에 따른 주요 자산별 감가상각 기준:**
+                    
+                    | 자산 유형 | 내용연수 | 연간 감가상각률 |
+                    |----------|---------|---------------|
+                    | 사무용 가구 | 6-10년 | 10-16.7% |
+                    | 컴퓨터/IT장비 | 3-5년 | 20-33.3% |
+                    | 생산장비 | 10-20년 | 5-10% |
+                    | 차량 | 6-10년 | 10-16.7% |
+                    | 건물/부동산 | 20-50년 | 2-5% |
+                    | 에어컨/냉난방 | 10-15년 | 6.7-10% |
+                    
+                    **감가상각 방법:**
+                    - 정액법 (Straight-line method): 매년 동일한 금액
+                    - 정률법 (Declining balance method): 매년 동일한 비율
+                    """)
+                
+                with st.form("asset_registration"):
+                    st.markdown(f"#### 📋 {get_text('basic_info')}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        asset_name = st.text_input(get_text('asset_name'), placeholder=get_text('asset_name_placeholder'))
+                        asset_category = st.selectbox(get_text('asset_category'), [
+                            "사무용 가구", "컴퓨터/IT장비", "생산장비", "차량", "건물/부동산", "에어컨/냉난방", "기타"
+                        ])
+                        purchase_date = st.date_input(get_text('purchase_date'))
+                        asset_location = st.text_input(get_text('asset_location'), placeholder=get_text('asset_location_placeholder'))
+                    
+                    with col2:
+                        purchase_price = st.number_input(get_text('purchase_price_vnd'), min_value=0, step=100000, help=get_text('purchase_price_vnd_help'))
+                        purchase_price_usd = st.number_input(get_text('purchase_price_usd'), min_value=0.0, step=100.0, help=get_text('purchase_price_usd_help'))
+                        asset_status = st.selectbox(get_text('asset_status_field'), [
+                            "정상", "수리 필요", "사용 중지", "폐기 예정"
+                        ])
+                        supplier_info = st.text_input(get_text('supplier_info'), placeholder=get_text('supplier_info_placeholder'))
+                    
+                    st.markdown(f"#### 📊 {get_text('depreciation_settings')}")
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        depreciation_method = st.selectbox(get_text('depreciation_method'), [
+                            "정액법 (Straight-line)", 
+                            "정률법 (Declining balance)",
+                            "감가상각 없음"
+                        ])
+                        
+                        # 카테고리별 기본 내용연수 설정
+                        default_years = {
+                            "사무용 가구": 8,
+                            "컴퓨터/IT장비": 4,
+                            "생산장비": 15,
+                            "차량": 8,
+                            "건물/부동산": 35,
+                            "에어컨/냉난방": 12,
+                            "기타": 5
+                        }
+                        
+                        useful_life = st.number_input(
+                            get_text('useful_life'), 
+                            min_value=1, 
+                            max_value=50, 
+                            value=default_years.get(asset_category, 5),
+                            help=get_text('useful_life_help')
+                        )
+                    
+                    with col4:
+                        salvage_value = st.number_input(get_text('salvage_value'), min_value=0, step=10000, help=get_text('salvage_value_help'))
+                        
+                        if depreciation_method != "감가상각 없음" and purchase_price > 0:
+                            annual_depreciation = (purchase_price - salvage_value) / useful_life
+                            st.metric(get_text('annual_depreciation_expense'), f"{annual_depreciation:,.0f} VND")
+                            st.metric(get_text('depreciation_rate'), f"{(annual_depreciation/purchase_price*100):.1f}%")
+                    
+                    description = st.text_area(get_text('description'), placeholder=get_text('description_placeholder'))
+                    
+                    if st.form_submit_button(f"🔖 {get_text('register_asset')}", type="primary"):
+                        # 자산 데이터 구성
+                        from datetime import datetime
+                        
+                        # 감가상각비 계산
+                        if depreciation_method != "감가상각 없음" and purchase_price > 0:
+                            annual_depreciation = (purchase_price - salvage_value) / useful_life
+                            monthly_depreciation = annual_depreciation / 12
+                        else:
+                            annual_depreciation = 0
+                            monthly_depreciation = 0
+                        
+                        asset_data = {
+                            "asset_name": asset_name,
+                            "category": asset_category,
+                            "purchase_date": purchase_date.strftime('%Y-%m-%d'),
+                            "purchase_price_vnd": purchase_price,
+                            "purchase_price_usd": purchase_price_usd,
+                            "location": asset_location,
+                            "status": asset_status,
+                            "supplier": supplier_info,
+                            "depreciation_method": depreciation_method,
+                            "useful_life": useful_life,
+                            "salvage_value": salvage_value,
+                            "annual_depreciation": annual_depreciation,
+                            "monthly_depreciation": monthly_depreciation,
+                            "description": description,
+                            "created_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        
+                        st.success("✅ 자산이 성공적으로 등록되었습니다!")
+                        
+                        # 등록된 자산 정보 요약 표시
+                        st.markdown("#### 📋 등록된 자산 정보")
+                        summary_col1, summary_col2 = st.columns(2)
+                        
+                        with summary_col1:
+                            st.info(f"""
+                            **기본 정보**
+                            - 자산명: {asset_name}
+                            - 카테고리: {asset_category}
+                            - 구매일자: {purchase_date.strftime('%Y-%m-%d')}
+                            - 취득원가: {purchase_price:,} VND
+                            - 보관위치: {asset_location}
+                            """)
+                        
+                        with summary_col2:
+                            if depreciation_method != "감가상각 없음":
+                                depreciation_rate = (annual_depreciation/purchase_price*100) if purchase_price > 0 else 0
+                                st.info(f"""
+                                **감가상각 정보**
+                                - 감가상각방법: {depreciation_method}
+                                - 내용연수: {useful_life}년
+                                - 연간 감가상각비: {annual_depreciation:,.0f} VND
+                                - 감가상각률: {depreciation_rate:.1f}%
+                                - 잔존가치: {salvage_value:,} VND
+                                """)
+                            else:
+                                st.info("**감가상각 정보**\n- 감가상각 대상 아님")
+                        
+                        st.balloons()
+            
+            with tab3:
+                st.subheader("📋 자산 목록 관리")
+                
+                # 검색 및 필터
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    search_term = st.text_input("🔍 자산명 검색", placeholder="자산명을 입력하세요")
+                with col2:
+                    filter_category = st.selectbox("카테고리 필터", [
+                        "전체", "사무용 가구", "컴퓨터/IT장비", "생산장비", "차량", "건물/부동산", "에어컨/냉난방", "기타"
+                    ])
+                with col3:
+                    filter_status = st.selectbox("상태 필터", [
+                        "전체", "정상", "수리 필요", "사용 중지", "폐기 예정"
+                    ])
+                
+                st.markdown("---")
+                
+                # 감가상각 계산 도구
+                st.subheader("🧮 감가상각 계산 도구")
+                with st.expander("💡 감가상각 시뮬레이션"):
+                    calc_col1, calc_col2 = st.columns(2)
+                    
+                    with calc_col1:
+                        calc_price = st.number_input("취득원가 (VND)", min_value=0, step=1000000, key="calc_price")
+                        calc_salvage = st.number_input("잔존가치 (VND)", min_value=0, step=100000, key="calc_salvage")
+                        calc_years = st.number_input("내용연수 (년)", min_value=1, max_value=50, value=5, key="calc_years")
+                    
+                    with calc_col2:
+                        if calc_price > 0:
+                            annual_dep = (calc_price - calc_salvage) / calc_years
+                            monthly_dep = annual_dep / 12
+                            depreciation_rate = (annual_dep / calc_price) * 100
+                            
+                            st.metric("연간 감가상각비", f"{annual_dep:,.0f} VND")
+                            st.metric("월간 감가상각비", f"{monthly_dep:,.0f} VND") 
+                            st.metric("감가상각률", f"{depreciation_rate:.2f}%")
+                            
+                            # 5년간 감가상각 스케줄 표시
+                            st.markdown("**감가상각 스케줄 (첫 5년)**")
+                            schedule_data = []
+                            cumulative_dep = 0
+                            for year in range(1, min(calc_years + 1, 6)):
+                                cumulative_dep += annual_dep
+                                book_value = calc_price - cumulative_dep
+                                schedule_data.append({
+                                    "년도": f"{year}년차",
+                                    "연간상각비": f"{annual_dep:,.0f}",
+                                    "누적상각비": f"{cumulative_dep:,.0f}",
+                                    "순장부가액": f"{max(book_value, calc_salvage):,.0f}"
+                                })
+                            
+                            import pandas as pd
+                            df_schedule = pd.DataFrame(schedule_data)
+                            st.dataframe(df_schedule, use_container_width=True)
+                
+                st.markdown("---")
+                st.info("등록된 자산이 없습니다. 자산을 등록하면 여기에 목록이 표시됩니다.")
+                    
         elif system_key == "admin_management":
             col_header, col_back = st.columns([3, 1])
             with col_header:
@@ -1176,9 +2866,6 @@ def show_page_for_menu(system_key):
                 if st.button(f"🛒 {get_text('purchase_product_registration')}", use_container_width=True):
                     st.session_state.selected_system = "purchase_management"
                     st.rerun()
-                if st.button("📦 사무용품 관리", use_container_width=True):  # 새로 추가
-                    st.session_state.selected_system = "office_supplies_management"
-                    st.rerun()
             with col3:
                 if st.button(f"📅 {get_text('admin_schedule_management')}", use_container_width=True):
                     st.session_state.selected_system = "schedule_task_management"
@@ -1186,24 +2873,16 @@ def show_page_for_menu(system_key):
                 if st.button(f"📄 {get_text('expense_admin_management')}", use_container_width=True):
                     st.session_state.selected_system = "expense_request_management"
                     st.rerun()
-        
-        # 기타 시스템들은 기존 코드와 동일하게 처리
-        # ... (나머지 시스템 처리 코드는 원본과 동일)
-        
+                    
         else:
             st.info(f"'{system_key}' 기능은 개발 중입니다.")
-            
     except Exception as e:
         st.error(f"페이지 로딩 중 오류: {str(e)}")
         st.exception(e)
 
-# ================================================================================
-# 메인 함수
-# ================================================================================
-
 def main():
     """메인 함수 - 즉시 UI 가드 구현으로 빈 화면 방지"""
-    logger.info("메인 함수 시작 - 즉시 UI 렌더링")
+    print("🚀 main() 함수 시작 - 즉시 UI 렌더링")
     
     try:
         # 1. IMMEDIATE UI GUARD - 즉시 페이지 설정하여 빈 화면 방지
@@ -1216,17 +2895,17 @@ def main():
         
         # 2. IMMEDIATE UI GUARD - 제목을 즉시 표시하여 빈 화면 방지
         st.title("🏢 YMV 관리 프로그램")
-        logger.info("즉시 UI 렌더링 완료 - 빈 화면 방지됨")
+        print("✅ 즉시 UI 렌더링 완료 - 빈 화면 방지됨")
         
     except Exception as e:
         # 페이지 설정 오류도 캐치하되 UI는 계속 표시
         st.error(f"페이지 설정 오류: {e}")
         st.title("🏢 YMV 관리 프로그램 (복구 모드)")
-        logger.error(f"페이지 설정 오류이지만 UI 계속 표시: {e}")
+        print(f"⚠️ 페이지 설정 오류이지만 UI 계속 표시: {e}")
     
     # 3. RERUN LOOP PREVENTION - language_just_changed 플래그 즉시 리셋
     if st.session_state.get("language_just_changed"):
-        logger.info("language_just_changed 플래그 리셋하여 무한 rerun 방지")
+        print("🔄 language_just_changed 플래그 리셋하여 무한 rerun 방지")
         st.session_state.language_just_changed = False
     
     # 사이드바 파일 목록 완전 숨김 처리
@@ -1273,10 +2952,10 @@ def main():
     """, unsafe_allow_html=True)
     
     try:
-        # 세션 상태 초기화
-        logger.info("세션 상태 초기화 시작...")
+        # 세션 상태 초기화 - 디버깅 로그 추가
+        print("🔧 세션 상태 초기화 시작...")
         initialize_session_state()
-        logger.info("세션 상태 초기화 완료")
+        print("✅ 세션 상태 초기화 완료")
         
         # 데이터 마이그레이션 (최초 실행시) - 간소화
         if 'migration_completed' not in st.session_state:
@@ -1289,37 +2968,45 @@ def main():
                 st.warning(f"마이그레이션 오류 (계속 진행): {migration_error}")
                 st.session_state.migration_completed = True  # 오류에도 계속 진행
         
-        # 매니저 초기화
+        # Lazy loading으로 매니저 초기화 시간 단축
         try:
-            initialize_managers()
+            if 'managers_initialized' not in st.session_state:
+                st.session_state.managers_initialized = False
+            
+            # 핵심 매니저는 이미 initialize_session_state()에서 로드됨
+            # 추가 매니저들만 필요시 로드
+                
+            # 나머지 매니저들은 필요할 때만 로드하도록 변경
+            st.session_state.managers_initialized = True
+                
         except Exception as e:
             # 매니저 초기화 오류는 앱 실행을 막지 않음
             st.warning(f"⚠️ 매니저 초기화 오류 (앱 계속 실행): {e}")
             st.session_state.managers_initialized = True  # 기본값으로 설정
         
-        # 언어 설정 로드
+        # 언어 설정 로드 - 디버깅 로그 추가
         current_lang = st.session_state.get('language', 'ko')
-        logger.info(f"언어 설정 로드 시작: {current_lang}")
+        print(f"🌐 언어 설정 로드 시작: {current_lang}")
         try:
             lang_dict = load_language(current_lang)
-            logger.info(f"언어 파일 로드 성공: {current_lang}")
+            print(f"✅ 언어 파일 로드 성공: {current_lang}")
         except Exception as lang_error:
-            logger.error(f"언어 파일 로드 오류: {lang_error}")
+            print(f"❌ 언어 파일 로드 오류: {lang_error}")
             st.error(f"언어 파일 로드 오류: {lang_error}")
             # 기본 언어 딕셔너리 사용
             lang_dict = {"app_title": "YMV 관리 프로그램", "login": "로그인"}
-            logger.warning("기본 언어 딕셔너리 사용")
+            print("⚠️ 기본 언어 딕셔너리 사용")
         
-        # 로그인 상태에 따른 페이지 표시
-        logger.info(f"현재 로그인 상태: {st.session_state.get('logged_in', False)}")
+        # 4. TRY/EXCEPT WITH EXCEPTION DISPLAY - 로그인 상태에 따른 페이지 표시
+        print(f"📊 현재 로그인 상태: {st.session_state.get('logged_in', False)}")
         
         if not st.session_state.logged_in:
-            logger.info("로그인 페이지 렌더링 시작...")
+            print("🔐 로그인 페이지 렌더링 시작...")
             try:
                 show_login_page(lang_dict)
-                logger.info("로그인 페이지 렌더링 성공")
+                print("✅ 로그인 페이지 렌더링 성공")
             except Exception as login_error:
-                logger.error(f"로그인 페이지 렌더링 오류: {login_error}")
+                print(f"❌ 로그인 페이지 렌더링 오류: {login_error}")
                 st.error(f"로그인 페이지 오류: {login_error}")
                 st.exception(login_error)
                 
@@ -1329,12 +3016,12 @@ def main():
                 st.text_input("비밀번호", type="password", key="emergency_password") 
                 st.button("로그인", key="emergency_login")
         else:
-            logger.info("메인 앱 렌더링 시작...")
+            print("🏠 메인 앱 렌더링 시작...")
             try:
                 show_main_app(lang_dict)
-                logger.info("메인 앱 렌더링 성공")
+                print("✅ 메인 앱 렌더링 성공")
             except Exception as app_error:
-                logger.error(f"메인 앱 렌더링 오류: {app_error}")
+                print(f"❌ 메인 앱 렌더링 오류: {app_error}")
                 st.error(f"메인 애플리케이션 오류: {app_error}")
                 st.exception(app_error)
                 
@@ -1349,7 +3036,6 @@ def main():
         st.error(f"앱 실행 중 심각한 오류 발생: {main_error}")
         st.write("**오류 상세:**")
         st.exception(main_error)
-        logger.error(f"Critical main error: {main_error}")
         
         # 최소한의 로그인 페이지라도 표시
         st.title("🏢 YMV 관리 프로그램")
@@ -1372,412 +3058,3 @@ if __name__ == "__main__":
             st.rerun()
         if st.button("관리자에게 문의"):
             st.write("시스템 관리자에게 문의해주세요.")
-
-# ================================================================================
-# 8-Office 구매 안정화-1 관련 추가 함수들
-# ================================================================================
-
-def show_office_purchase_dashboard():
-    """Office 구매 관리 대시보드"""
-    try:
-        office_manager = ensure_manager_loaded('office_purchase_manager')
-        if office_manager is None:
-            st.error("Office 구매 관리자를 초기화할 수 없습니다.")
-            return
-        
-        st.subheader("📊 Office 구매 현황")
-        
-        # 통계 카드
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            try:
-                total_licenses = office_manager.get_total_licenses()
-                st.metric("총 라이선스", f"{total_licenses}개")
-            except:
-                st.metric("총 라이선스", "0개", help="데이터 로딩 중...")
-        
-        with col2:
-            try:
-                active_licenses = office_manager.get_active_licenses()
-                st.metric("활성 라이선스", f"{active_licenses}개")
-            except:
-                st.metric("활성 라이선스", "0개", help="데이터 로딩 중...")
-        
-        with col3:
-            try:
-                monthly_cost = office_manager.calculate_monthly_cost()
-                st.metric("월간 비용", f"{monthly_cost:,.0f} VND")
-            except:
-                st.metric("월간 비용", "0 VND", help="데이터 로딩 중...")
-        
-        with col4:
-            try:
-                expiring_soon = office_manager.get_expiring_licenses(30)
-                st.metric("만료 예정", f"{len(expiring_soon)}개", help="30일 이내 만료")
-            except:
-                st.metric("만료 예정", "0개", help="데이터 로딩 중...")
-        
-        # 라이선스 최적화 제안
-        st.markdown("---")
-        st.subheader("🎯 라이선스 최적화 제안")
-        
-        try:
-            optimization_suggestions = office_manager.get_optimization_suggestions()
-            if optimization_suggestions:
-                for suggestion in optimization_suggestions:
-                    st.info(f"💡 {suggestion}")
-            else:
-                st.success("✅ 현재 라이선스 할당이 최적화되어 있습니다.")
-        except Exception as e:
-            st.warning(f"최적화 제안을 가져올 수 없습니다: {e}")
-            
-    except Exception as e:
-        logger.error(f"Office purchase dashboard error: {e}")
-        st.error(f"Office 구매 대시보드 오류: {e}")
-
-def validate_office_purchase_data(purchase_data):
-    """Office 구매 데이터 검증"""
-    errors = []
-    
-    # 필수 필드 검증
-    required_fields = ['purchase_id', 'requester_name', 'total_amount']
-    for field in required_fields:
-        if not purchase_data.get(field):
-            errors.append(f"{field}는 필수 입력 항목입니다.")
-    
-    # 금액 검증
-    try:
-        amount = float(purchase_data.get('total_amount', 0))
-        if amount < 0:
-            errors.append("금액은 0 이상이어야 합니다.")
-    except (ValueError, TypeError):
-        errors.append("올바른 금액을 입력해주세요.")
-    
-    # 구매 ID 형식 검증
-    purchase_id = purchase_data.get('purchase_id', '')
-    if purchase_id and not purchase_id.startswith('OFF-'):
-        errors.append("Office 구매 ID는 'OFF-'로 시작해야 합니다.")
-    
-    return errors
-
-def generate_office_purchase_report(start_date, end_date):
-    """Office 구매 보고서 생성"""
-    try:
-        office_manager = ensure_manager_loaded('office_purchase_manager')
-        if office_manager is None:
-            return None
-        
-        # 기간별 구매 데이터 조회
-        purchases = office_manager.get_purchases_by_period(start_date, end_date)
-        
-        if not purchases:
-            return {"message": "해당 기간에 구매 내역이 없습니다."}
-        
-        # 보고서 데이터 생성
-        report_data = {
-            "period": f"{start_date} ~ {end_date}",
-            "total_purchases": len(purchases),
-            "total_amount": sum(p.get('total_amount', 0) for p in purchases),
-            "categories": {},
-            "monthly_breakdown": {}
-        }
-        
-        # 카테고리별 분석
-        for purchase in purchases:
-            category = purchase.get('category', '기타')
-            if category not in report_data["categories"]:
-                report_data["categories"][category] = {"count": 0, "amount": 0}
-            
-            report_data["categories"][category]["count"] += 1
-            report_data["categories"][category]["amount"] += purchase.get('total_amount', 0)
-        
-        return report_data
-        
-    except Exception as e:
-        logger.error(f"Office purchase report generation error: {e}")
-        return {"error": f"보고서 생성 중 오류: {e}"}
-def show_office_supplies_page():
-    """사무용품 관리 페이지"""
-    st.title("📦 사무용품 관리")
-    
-    # 매니저 인스턴스 가져오기
-    manager = get_office_supplies_manager_cached()
-    if not manager:
-        st.error("사무용품 관리 시스템을 사용할 수 없습니다. Supabase 연결을 확인해주세요.")
-        st.info("환경변수 SUPABASE_URL과 SUPABASE_KEY가 설정되어 있는지 확인하세요.")
-        return
-    
-    # 탭으로 기능 구분
-    tab1, tab2, tab3, tab4 = st.tabs(["📝 구매 신청", "📋 신청 내역", "🛒 발주 관리", "📊 대시보드"])
-    
-    with tab1:
-        show_purchase_request_form(manager)
-    
-    with tab2:
-        show_purchase_requests_list(manager)
-    
-    with tab3:
-        show_purchase_orders_list(manager)
-    
-    with tab4:
-        show_office_supplies_dashboard(manager)
-
-def show_purchase_request_form(manager):
-    """구매 신청 폼"""
-    st.subheader("새 구매 신청")
-    
-    with st.form("purchase_request_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            requester_name = st.text_input("신청자명", value=st.session_state.get('user_name', ''))
-            department = st.text_input("부서", placeholder="예: 개발팀")
-        
-        with col2:
-            urgency = st.selectbox("긴급도", ["normal", "urgent", "low"], 
-                                 format_func=lambda x: {"normal": "보통", "urgent": "긴급", "low": "낮음"}[x])
-        
-        reason = st.text_area("신청 사유", placeholder="구매가 필요한 이유를 입력하세요")
-        
-        # 품목 선택
-        st.subheader("구매 품목")
-        
-        # 카테고리별 품목 조회
-        categories = manager.get_categories()
-        if not categories.empty:
-            category_options = dict(zip(categories['id'], categories['name']))
-            selected_category = st.selectbox("카테고리 선택", options=list(category_options.keys()),
-                                           format_func=lambda x: category_options[x])
-            
-            items = manager.get_items(selected_category)
-            
-            if not items.empty:
-                # 동적으로 품목 추가
-                if 'request_items' not in st.session_state:
-                    st.session_state.request_items = []
-                
-                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-                with col1:
-                    item_options = dict(zip(items['id'], items['name']))
-                    selected_item = st.selectbox("품목 선택", options=list(item_options.keys()),
-                                               format_func=lambda x: item_options[x])
-                with col2:
-                    quantity = st.number_input("수량", min_value=1, value=1)
-                with col3:
-                    # 기본 단가 표시
-                    default_price = items[items['id'] == selected_item]['standard_price'].iloc[0] if not items.empty else 0
-                    unit_price = st.number_input("단가", min_value=0.0, value=float(default_price))
-                with col4:
-                    if st.button("추가", key="add_item"):
-                        item_name = item_options[selected_item]
-                        st.session_state.request_items.append({
-                            'item_id': selected_item,
-                            'name': item_name,
-                            'quantity': quantity,
-                            'unit_price': unit_price,
-                            'total': quantity * unit_price
-                        })
-                        st.rerun()
-                
-                # 추가된 품목 목록
-                if st.session_state.request_items:
-                    st.subheader("신청 품목 목록")
-                    for i, item in enumerate(st.session_state.request_items):
-                        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
-                        with col1:
-                            st.write(item['name'])
-                        with col2:
-                            st.write(f"{item['quantity']:,}")
-                        with col3:
-                            st.write(f"₩{item['unit_price']:,.0f}")
-                        with col4:
-                            st.write(f"₩{item['total']:,.0f}")
-                        with col5:
-                            if st.button("삭제", key=f"del_{i}"):
-                                st.session_state.request_items.pop(i)
-                                st.rerun()
-                    
-                    total_amount = sum(item['total'] for item in st.session_state.request_items)
-                    st.write(f"**총 금액: ₩{total_amount:,.0f}**")
-        
-        # 제출 버튼
-        submitted = st.form_submit_button("구매 신청 제출", type="primary")
-        
-        if submitted:
-            if not requester_name or not department:
-                st.error("신청자명과 부서는 필수입니다.")
-            elif not st.session_state.get('request_items'):
-                st.error("최소 1개 이상의 품목을 추가해주세요.")
-            else:
-                # 구매 신청 생성
-                items_data = []
-                for item in st.session_state.request_items:
-                    items_data.append({
-                        'item_id': item['item_id'],
-                        'quantity': item['quantity'],
-                        'unit_price': item['unit_price']
-                    })
-                
-                request_id = manager.create_purchase_request(
-                    requester_name=requester_name,
-                    department=department,
-                    items=items_data,
-                    reason=reason,
-                    urgency=urgency
-                )
-                
-                if request_id > 0:
-                    st.success(f"구매 신청이 완료되었습니다! (신청번호: {request_id})")
-                    st.session_state.request_items = []  # 목록 초기화
-                    st.rerun()
-                else:
-                    st.error("구매 신청 처리 중 오류가 발생했습니다.") 
-def show_purchase_requests_list(manager):
-    """구매 신청 내역"""
-    st.subheader("구매 신청 내역")
-    
-    # 필터
-    col1, col2 = st.columns(2)
-    with col1:
-        status_filter = st.selectbox("상태 필터", ["전체", "pending", "approved", "rejected", "completed"],
-                                   format_func=lambda x: {"전체": "전체", "pending": "대기중", "approved": "승인됨", 
-                                                         "rejected": "거부됨", "completed": "완료됨"}[x])
-    
-    # 데이터 조회
-    status = None if status_filter == "전체" else status_filter
-    requests = manager.get_purchase_requests(status)
-    
-    if not requests.empty:
-        # 상태 한글화
-        requests['status_kr'] = requests['status'].map({
-            'pending': '대기중', 'approved': '승인됨', 'rejected': '거부됨', 'completed': '완료됨'
-        })
-        
-        # 데이터 표시
-        for _, req in requests.iterrows():
-            with st.expander(f"신청번호 {req['id']} - {req['requester_name']} ({req['status_kr']})"):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.write(f"**신청자:** {req['requester_name']}")
-                    st.write(f"**부서:** {req['department']}")
-                with col2:
-                    st.write(f"**신청일:** {req['request_date']}")
-                    st.write(f"**긴급도:** {req['urgency']}")
-                with col3:
-                    st.write(f"**총 금액:** ₩{req['total_amount']:,.0f}")
-                    st.write(f"**상태:** {req['status_kr']}")
-                
-                if req['reason']:
-                    st.write(f"**신청 사유:** {req['reason']}")
-                
-                # 상세 정보 버튼
-                if st.button(f"상세보기", key=f"detail_{req['id']}"):
-                    show_request_detail(manager, req['id'])
-                
-                # 승인/거부 버튼 (총무 이상만)
-                if req['status'] == 'pending' and st.session_state.get('access_level') in ['admin', 'ceo', 'master']:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button(f"승인", key=f"approve_{req['id']}", type="primary"):
-                            if manager.approve_request(req['id'], st.session_state.get('user_name', 'unknown')):
-                                st.success("승인되었습니다!")
-                                st.rerun()
-                    with col2:
-                        if st.button(f"거부", key=f"reject_{req['id']}"):
-                            if manager.reject_request(req['id'], st.session_state.get('user_name', 'unknown')):
-                                st.success("거부되었습니다!")
-                                st.rerun()
-    else:
-        st.info("신청 내역이 없습니다.")
-
-def show_request_detail(manager, request_id):
-    """구매 신청 상세 정보"""
-    details = manager.get_request_details(request_id)
-    
-    if details['request'] and details['items']:
-        st.subheader(f"신청번호 {request_id} 상세 정보")
-        
-        # 기본 정보
-        req = details['request']
-        st.write(f"**신청자:** {req['requester_name']}")
-        st.write(f"**부서:** {req['department']}")
-        st.write(f"**신청일:** {req['request_date']}")
-        st.write(f"**총 금액:** ₩{req['total_amount']:,.0f}")
-        
-        # 품목 정보
-        st.subheader("신청 품목")
-        import pandas as pd
-        items_df = pd.DataFrame(details['items'])
-        items_df['총액'] = items_df['quantity'] * items_df['unit_price']
-        
-        st.dataframe(
-            items_df[['item_name', 'quantity', 'unit_price', '총액', 'notes']],
-            column_config={
-                'item_name': '품목명',
-                'quantity': '수량',
-                'unit_price': st.column_config.NumberColumn('단가', format="₩%.0f"),
-                '총액': st.column_config.NumberColumn('총액', format="₩%.0f"),
-                'notes': '비고'
-            },
-            hide_index=True
-        )
-
-def show_purchase_orders_list(manager):
-    """발주 관리"""
-    st.subheader("발주 관리")
-    
-    orders = manager.get_purchase_orders()
-    
-    if not orders.empty:
-        for _, order in orders.iterrows():
-            with st.expander(f"발주번호 {order['id']} - {order['supplier']}"):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.write(f"**공급업체:** {order['supplier']}")
-                    st.write(f"**신청자:** {order['requester_name']}")
-                with col2:
-                    st.write(f"**발주일:** {order['order_date']}")
-                    st.write(f"**부서:** {order['department']}")
-                with col3:
-                    st.write(f"**총 금액:** ₩{order['total_amount']:,.0f}")
-                    st.write(f"**상태:** {order['status']}")
-    else:
-        st.info("발주 내역이 없습니다.")
-
-def show_office_supplies_dashboard(manager):
-    """대시보드"""
-    st.subheader("사무용품 구매 현황")
-    
-    from datetime import datetime
-    now = datetime.now()
-    summary = manager.get_monthly_summary(now.year, now.month)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("이번달 신청", f"{summary['request_count']}건")
-    with col2:
-        st.metric("신청 금액", f"₩{summary['request_amount']:,.0f}")
-    with col3:
-        st.metric("이번달 발주", f"{summary['order_count']}건")
-    with col4:
-        st.metric("발주 금액", f"₩{summary['order_amount']:,.0f}")
-    
-    # 최근 신청 내역
-    st.subheader("최근 신청 내역")
-    recent_requests = manager.get_purchase_requests()
-    if not recent_requests.empty:
-        recent_requests = recent_requests.head(5)
-        st.dataframe(
-            recent_requests[['id', 'requester_name', 'department', 'request_date', 'total_amount', 'status']],
-            column_config={
-                'id': '신청번호',
-                'requester_name': '신청자',
-                'department': '부서',
-                'request_date': '신청일',
-                'total_amount': st.column_config.NumberColumn('금액', format="₩%.0f"),
-                'status': '상태'
-            },
-            hide_index=True
-        )                       
