@@ -13,6 +13,7 @@ from managers.postgresql.base_postgresql_manager import BasePostgreSQLManager
 import psycopg2
 from contextlib import contextmanager
 import logging
+import psycopg2.errors  # 이 줄을 추가
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -507,8 +508,8 @@ def get_parent_level(level):
     return level_map.get(level)
 
 # 추가로 더 안전한 버전 (ON CONFLICT 사용)
-def add_new_component_safe(category_type, level, component_code, name_en, parent_component):
-    """새 컴포넌트를 데이터베이스에 추가 - ON CONFLICT 사용"""
+def add_new_component(category_type, level, component_code, name_en, parent_component):
+    """새 컴포넌트를 데이터베이스에 추가 - 중복 검사 포함"""
     try:
         with get_safe_db_connection() as conn:
             if conn is None:
@@ -516,32 +517,30 @@ def add_new_component_safe(category_type, level, component_code, name_en, parent
                 
             cursor = conn.cursor()
             
-            # ON CONFLICT를 사용한 안전한 삽입
+            # 1. 먼저 중복 검사
+            cursor.execute("""
+                SELECT component_code FROM multi_category_components 
+                WHERE category_type = %s AND level = %s AND component_code = %s
+            """, (category_type, level, component_code))
+            
+            existing = cursor.fetchone()
+            if existing:
+                st.error(f"이미 존재하는 컴포넌트 코드입니다: {component_code}")
+                return False
+            
+            # 2. 중복이 없으면 삽입
             cursor.execute("""
                 INSERT INTO multi_category_components 
                 (category_type, level, component_code, component_name_en, parent_component, is_active)
                 VALUES (%s, %s, %s, %s, %s, 1)
-                ON CONFLICT (category_type, level, component_code) 
-                DO UPDATE SET 
-                    component_name_en = EXCLUDED.component_name_en,
-                    parent_component = EXCLUDED.parent_component,
-                    updated_date = CURRENT_TIMESTAMP
-                RETURNING component_code, (xmax = 0) AS was_inserted
             """, (category_type, level, component_code, name_en, parent_component or None))
             
-            result = cursor.fetchone()
             conn.commit()
+            return True
             
-            if result:
-                code, was_inserted = result
-                if was_inserted:
-                    st.success(f"새 컴포넌트가 추가되었습니다: {code}")
-                else:
-                    st.info(f"기존 컴포넌트가 업데이트되었습니다: {code}")
-                return True
-            else:
-                return False
-            
+    except psycopg2.errors.UniqueViolation:
+        st.error(f"중복된 컴포넌트 코드입니다: {component_code}")
+        return False
     except Exception as e:
         st.error(f"데이터베이스 오류: {e}")
         return False
