@@ -5,7 +5,23 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
-from managers.legacy.office_purchase_manager import OfficePurchaseManager
+import sys
+import os
+sys.path.append('/mount/src/yumold-erp-system')
+
+try:
+    from managers.legacy.office_purchase_manager import OfficePurchaseManager
+except ImportError:
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("office_purchase_manager", "/mount/src/yumold-erp-system/managers/legacy/office_purchase_manager.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        OfficePurchaseManager = module.OfficePurchaseManager
+    except Exception as e:
+        import streamlit as st
+        st.error(f"OfficePurchaseManager 모듈을 로드할 수 없습니다: {e}")
+        st.stop()
 
 def show_purchase_page(get_text):
     """사무용품 구매 기록 페이지를 표시"""
